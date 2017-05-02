@@ -43,6 +43,7 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
@@ -66,7 +67,8 @@ import eu.project.rapid.common.RapidUtils;
  */
 public class AppHandler implements Runnable {
 
-    private static final String TAG = "AppHandler";
+    private static AtomicInteger id = new AtomicInteger();
+    private String TAG;
 
     private Configuration config;
     // The main thread has cloneId = 0
@@ -86,6 +88,8 @@ public class AppHandler implements Runnable {
     private final AtomicInteger nrClonesReady = new AtomicInteger(0); // The main thread waits for all the
     // clone helpers to finish execution
 
+    private static Map<String, Integer> apkMap = new ConcurrentHashMap<>(); // appName, apkSize
+    private static Map<String, CountDownLatch> apkMapSemaphore = new ConcurrentHashMap<>(); // appName, latch
     private String appName; // the app name sent by the phone
     private int appLength; // the app length in bytes sent by the phone
     private Object objToExecute = new Object(); // the object to be executed sent by the phone
@@ -94,7 +98,6 @@ public class AppHandler implements Runnable {
     private Object[] pValues; // the values of the parameters to be passed to the method
     private Class<?> returnType; // the return type of the method
     private String apkFilePath; // the path where the apk is installed
-    //    private LinkedList<File> libraries;
 
     /**
      * Key is the appName.
@@ -112,6 +115,7 @@ public class AppHandler implements Runnable {
     private DexClassLoader mCurrentDexLoader;
 
     public AppHandler(Socket pClient, final Context cW, Configuration config) {
+        TAG = AppHandler.class.getName() + "-" + id.getAndIncrement();
         Log.d(TAG, "New Client connected");
         this.mClient = pClient;
         this.mContext = cW;
@@ -183,7 +187,7 @@ public class AppHandler implements Runnable {
                         appLength = mObjIs.readInt();
                         apkFilePath = mContext.getFilesDir().getAbsolutePath() + "/" + appName + ".apk";
                         Log.d(TAG, "Registering apk: " + appName + " of size: " + appLength + " bytes");
-                        if (apkPresent(apkFilePath, appLength)) {
+                        if (apkPresent(apkFilePath, appName, appLength)) {
                             Log.d(TAG, "APK present");
                             mOs.write(RapidMessages.AS_APP_PRESENT_AC);
                         } else {
@@ -198,14 +202,16 @@ public class AppHandler implements Runnable {
                             String oldDexFilePath =
                                     mContext.getFilesDir().getAbsolutePath() + "/" + appName + ".dex";
                             new File(oldDexFilePath).delete();
+                            apkMapSemaphore.get(appName).countDown();
                         }
+
+                        // Wait for the file to be written on the disk
+                        apkMapSemaphore.get(appName).await();
                         // Create the new (if needed) dex file and load the .dex file
                         File dexFile = new File(apkFilePath);
                         Log.d(TAG, "APK file size on disk: " + dexFile.length());
-//                        libraries = addLibraries(dexFile);
                         addLibraries(dexFile);
                         mCurrentDexLoader = mObjIs.addDex(dexFile);
-//                        AccelerationServer.dexClassLoaderMap.put(appName, mObjIs.addDex(dexFile));
                         Log.d(TAG, "DEX file added.");
 
                         break;
@@ -224,8 +230,8 @@ public class AppHandler implements Runnable {
             // hide everything silently if we didn't foresee them cropping
             // up... Since we don't want the server to die because
             // somebody's program is misbehaving
-            Log.e(TAG, "Exception not caught properly - " + e);
-            e.printStackTrace();
+            Log.e(TAG, "Client disconnected: " + e);
+//            e.printStackTrace();
         } catch (Error e) {
             // We don't want any exceptions to escape from here,
             // hide everything silently if we didn't foresee them dropping
@@ -381,11 +387,15 @@ public class AppHandler implements Runnable {
 
                     File currLibFolder =
                             new File(libFolder.getAbsolutePath() + File.separator + libName + "-" + libSeqNr);
-                    currLibFolder.mkdir();
+                    if (!currLibFolder.mkdir()) {
+                        Log.e(TAG, "Could not create folder: " + currLibFolder);
+                    }
 
                     File libFile =
                             new File(currLibFolder.getAbsolutePath() + File.separator + libName + ".so");
-                    libFile.createNewFile();
+                    if (!libFile.createNewFile()) {
+                        Log.e(TAG, "Could not create file: " + libFile);
+                    }
 
                     Log.d(TAG, "Writing lib file to " + libFile.getAbsolutePath());
                     FileOutputStream fos = new FileOutputStream(libFile);
@@ -661,12 +671,24 @@ public class AppHandler implements Runnable {
      * @param filename filename of the apk file (used for identification)
      * @return true if the apk is present, false otherwise
      */
-    private boolean apkPresent(String filename, int appLength) {
+    private synchronized boolean apkPresent(String filename, String appName, int appLength) {
         // TODO: more sophisticated checking for existence
         File apkFile = new File(filename);
-        return (apkFile.exists() && apkFile.length() == appLength);
-    }
+//        return (apkFile.exists() && apkFile.length() == appLength);
 
+        if (apkFile.exists() && apkFile.length() == appLength) {
+            apkMapSemaphore.put(appName, new CountDownLatch(0));
+            return true;
+        }
+
+        if (apkMap.get(appName) == null || apkMap.get(appName) != appLength) {
+            apkMap.put(appName, appLength);
+            apkMapSemaphore.put(appName, new CountDownLatch(1));
+            return false;
+        }
+
+        return true;
+    }
 
     /**
      * Connect to the manager and ask for more clones.<br>
@@ -677,8 +699,8 @@ public class AppHandler implements Runnable {
     private boolean connectToServerHelpers() {
 
         Socket socket = null;
-        OutputStream os = null;
-        InputStream is = null;
+        OutputStream os;
+        InputStream is;
         ObjectOutputStream oos = null;
         ObjectInputStream ois = null;
 

@@ -729,7 +729,7 @@ public class DFE {
                 Log.d(TAG, "Apk name - " + apkName);
 
                 os.write(RapidMessages.AC_REGISTER_AS);
-                // Send apkName and apkLength to clone.
+                // Send apkName and apkLength to the VM.
                 // The clone will compare these information with what he has and tell
                 // if he doesn't have the apk or this one differs in size.
                 oos.writeObject(mAppName);

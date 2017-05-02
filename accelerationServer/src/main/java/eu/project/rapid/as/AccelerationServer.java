@@ -271,6 +271,7 @@ public class AccelerationServer extends Service {
 
             // FIXME: remove the hard-coded 10.0.*
             if (vmIpAddress.getHostAddress().startsWith("10.0")) {
+//            if (isEmulator()) {
                 // This is a VM running on the cloud
                 boolean hostMachineReachable = false;
                 do {
@@ -283,7 +284,7 @@ public class AccelerationServer extends Service {
                         InetAddress hostMachineAddress = InetAddress.getByName(config.getVmmIp());
                         try {
                             Log.i(TAG,
-                                    "Trying to ping the host machine " + hostMachineAddress.getHostAddress() + "...");
+                                    "Trying to ping the host machine " + hostMachineAddress.getHostAddress());
                             hostMachineReachable = hostMachineAddress.isReachable(5000);
                             try {
                                 Thread.sleep(1000);
@@ -313,7 +314,7 @@ public class AccelerationServer extends Service {
                 Log.d(TAG, "Connecting to VMM: " + config.getVmmIp() + ":" + config.getVmmPort());
 
                 vmmSocket = new Socket();
-                vmmSocket.connect(new InetSocketAddress(config.getVmmIp(), config.getVmmPort()), 10 * 1000);
+                vmmSocket.connect(new InetSocketAddress(config.getVmmIp(), config.getVmmPort()), 3 * 1000);
                 vmmOut = new ObjectOutputStream(vmmSocket.getOutputStream());
                 vmmIn = new ObjectInputStream(vmmSocket.getInputStream());
 
