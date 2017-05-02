@@ -34,6 +34,7 @@ class DSE {
 
     private static final String TAG = "DSE";
     private static final boolean VERBOSE_LOG = false;
+    private static String appName;
 
     // To be used in case of no previous remote execution.
     // If the ulRate and dlRate are bigger than these values then we offload
@@ -42,11 +43,12 @@ class DSE {
 
     private DBCache dbCache;
 
-    private DSE() {
-        this.dbCache = DBCache.getDbCache();
+    private DSE(String appName) {
+        DSE.appName = appName;
+        this.dbCache = DBCache.getDbCache(DSE.appName);
     }
 
-    public static DSE getInstance() {
+    static DSE getInstance(String appName) {
         // local variable increases performance by 25 percent according to
         // Joshua Bloch "Effective Java, Second Edition", p. 283-284
         DSE result = instance;
@@ -55,7 +57,7 @@ class DSE {
             synchronized (DFE.class) {
                 result = instance;
                 if (result == null) {
-                    instance = result = new DSE();
+                    instance = result = new DSE(appName);
                 }
             }
         }

@@ -183,7 +183,7 @@ public class DFE {
         readConfigurationFile();
         initializeCrypto();
 
-        mDSE = DSE.getInstance();
+        mDSE = DSE.getInstance(this.mAppName);
 
         config.setClone(sClone);
         netProfiler = new NetworkProfiler(mContext, config);
@@ -247,14 +247,14 @@ public class DFE {
         File rapidDir = new File(Constants.RAPID_FOLDER);
         if (!rapidDir.exists()) {
             if (!rapidDir.mkdirs()) {
-                Log.w(TAG, "Could not create the Rapid folder: " + Constants.RAPID_FOLDER);
+                Log.w(TAG, "Could not create the RAPID folder: " + Constants.RAPID_FOLDER);
             }
         }
 
         File rapidTestDir = new File(Constants.TEST_LOGS_FOLDER);
         if (!rapidTestDir.exists()) {
             if (!rapidTestDir.mkdirs()) {
-                Log.w(TAG, "Could not create the Rapid folder: " + Constants.TEST_LOGS_FOLDER);
+                Log.w(TAG, "Could not create the RAPID test folder: " + Constants.TEST_LOGS_FOLDER);
             }
         }
     }

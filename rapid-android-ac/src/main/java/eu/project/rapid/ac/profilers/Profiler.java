@@ -33,8 +33,6 @@ public class Profiler {
 
     private static final String TAG = "Profiler";
 
-    Phone phone;
-
     private ProgramProfiler progProfiler;
     private NetworkProfiler netProfiler;
     private DeviceProfiler devProfiler;
@@ -109,7 +107,7 @@ public class Profiler {
         lastLogRecord.execLocation = mLocation;
 
         if (mRegime == REGIME_CLIENT) {
-            phone = PhoneFactory.getPhone(devProfiler, netProfiler, progProfiler);
+            Phone phone = PhoneFactory.getPhone(devProfiler, netProfiler, progProfiler);
             phone.estimateEnergyConsumption();
             lastLogRecord.energyConsumption = phone.getTotalEstimatedEnergy();
             lastLogRecord.cpuEnergy = phone.getEstimatedCpuEnergy();
@@ -122,7 +120,7 @@ public class Profiler {
             try {
                 synchronized (this) {
                     if (logFileWriter == null) {
-                        File logFile = new File(Constants.LOG_FILE_NAME);
+                        File logFile = new File(Constants.LOG_FILE_NAME + lastLogRecord.appName + ".csv");
                         // Try creating new, if doesn't exist
                         boolean logFileCreated = logFile.createNewFile();
                         logFileWriter = new FileWriter(logFile, true);
@@ -131,7 +129,7 @@ public class Profiler {
                         }
                     }
 
-                    logFileWriter.append(lastLogRecord.toString() + "\n");
+                    logFileWriter.append(lastLogRecord.toString()).append("\n");
                     logFileWriter.flush();
                 }
             } catch (IOException e) {
@@ -143,7 +141,7 @@ public class Profiler {
     }
 
     private void updateDbCache() {
-        DBCache dbCache = DBCache.getDbCache();
+        DBCache dbCache = DBCache.getDbCache(lastLogRecord.appName);
         // public DBEntry(String appName, String methodName, String execLocation, String networkType,
         // String networkSubType, int ulRate, int dlRate, long execDuration, long execEnergy)
         DBEntry dbEntry =

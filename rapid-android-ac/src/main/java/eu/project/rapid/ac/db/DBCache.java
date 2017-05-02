@@ -8,6 +8,7 @@ import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.Map;
 
+import eu.project.rapid.ac.DFE;
 import eu.project.rapid.ac.utils.Constants;
 import eu.project.rapid.ac.utils.Utils;
 import eu.project.rapid.common.RapidConstants.ExecLocation;
@@ -24,14 +25,16 @@ public class DBCache {
     private static final String TAG = "DBCache";
 
     private static int nrElements;
-    private static DBCache dbCache;
+    private static DBCache instance;
     private static Map<String, Deque<DBEntry>> dbMap; // appName is the key
+    private static String dbCacheFileName;
 
     @SuppressWarnings("unchecked")
-    private DBCache() {
+    private DBCache(String appName) {
+        dbCacheFileName = Constants.FILE_DB_CACHE + appName + ".ser";
         try {
-            Log.i(TAG, "Reading the dbCache from file: " + Constants.FILE_DB_CACHE);
-            dbMap = (Map<String, Deque<DBEntry>>) Utils.readObjectFromFile(Constants.FILE_DB_CACHE);
+            Log.i(TAG, "Reading the dbCache from file: " + dbCacheFileName);
+            dbMap = (Map<String, Deque<DBEntry>>) Utils.readObjectFromFile(dbCacheFileName);
         } catch (ClassNotFoundException | IOException e) {
             Log.w(TAG, "Could not read the dbCache from file: " + e);
         }
@@ -41,13 +44,21 @@ public class DBCache {
         }
     }
 
-    public static DBCache getDbCache() {
-        if (dbCache == null) {
-            Log.i(TAG, "Creating the dbCache object");
-            dbCache = new DBCache();
+    public static DBCache getDbCache(String appName) {
+        // local variable increases performance by 25 percent according to
+        // Joshua Bloch "Effective Java, Second Edition", p. 283-284
+        DBCache result = instance;
+
+        if (result == null) {
+            synchronized (DFE.class) {
+                result = instance;
+                if (result == null) {
+                    instance = result = new DBCache(appName);
+                }
+            }
         }
 
-        return dbCache;
+        return result;
     }
 
     public void insertEntry(DBEntry entry) {
@@ -172,7 +183,7 @@ public class DBCache {
      */
     public static void saveDbCache() {
         try {
-            Utils.writeObjectToFile(Constants.FILE_DB_CACHE, dbMap);
+            Utils.writeObjectToFile(dbCacheFileName, dbMap);
         } catch (IOException e) {
             Log.e(TAG, "Could not save the dbCache on the file: " + e);
         }
