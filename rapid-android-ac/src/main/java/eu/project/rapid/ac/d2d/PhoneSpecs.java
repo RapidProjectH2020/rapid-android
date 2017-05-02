@@ -15,10 +15,12 @@
  *******************************************************************************/
 package eu.project.rapid.ac.d2d;
 
-import java.io.Serializable;
-
 import android.content.Context;
 import android.util.Log;
+
+import java.io.Serializable;
+import java.util.Random;
+
 import eu.project.rapid.ac.utils.Utils;
 
 /**
@@ -54,7 +56,8 @@ public class PhoneSpecs implements Serializable, Comparable<PhoneSpecs> {
 
     // FIXME: On Android 6 we can't just read the ID directly, we need to ask for runtime
     // permission.
-    phoneId = Utils.getDeviceIdHashHex(context);
+//    phoneId = Utils.getDeviceIdHashHex(context);
+    phoneId = String.valueOf(new Random().nextLong());
     nrCPUs = Utils.getDeviceNrCPUs();
     cpuFreqKHz = Utils.getDeviceCPUFreq();
     try {
@@ -137,7 +140,7 @@ public class PhoneSpecs implements Serializable, Comparable<PhoneSpecs> {
   }
 
   /**
-   * @param cpuFreqKHz the cpuFreqKHz to set
+   * @param cpuPowerKHz
    */
   public void setCpuPowerKHz(int cpuPowerKHz) {
     this.cpuFreqKHz = cpuPowerKHz;
