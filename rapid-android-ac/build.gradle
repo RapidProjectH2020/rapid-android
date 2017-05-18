@@ -13,7 +13,7 @@ ext {
     siteUrl = 'https://github.com/RapidProjectH2020/rapid-android'
     gitUrl = 'https://github.com/RapidProjectH2020/rapid-android.git'
 
-    libraryVersion = '0.0.8'
+    libraryVersion = '0.0.9'
 
     developerId = 'rapidprojecth2020'
     developerName = 'Rapid EU Project'
@@ -48,6 +48,7 @@ android {
 
 dependencies {
     compile 'eu.project.rapid:rapid-common:0.0.1'
+//    compile project(':rapid-common')
 }
 
 // Place it at the end of the file

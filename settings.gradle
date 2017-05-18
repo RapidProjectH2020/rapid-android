@@ -1,2 +1,4 @@
 include ':rapid-android-ac', ':rapid-gvirtus4a'
 include ':accelerationServer'
+// include ':rapid-common'
+// project(':rapid-common').projectDir = new File('../rapid-common/')

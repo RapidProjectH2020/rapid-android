@@ -32,7 +32,7 @@ class DSE {
 
     private static DSE instance;
 
-    private static final String TAG = "DSE";
+    private static final String TAG = DSE.class.getName();
     private static final boolean VERBOSE_LOG = false;
     private static String appName;
 
@@ -294,12 +294,12 @@ class DSE {
         return Math.sqrt((ul2 - ul1) * (ul2 - ul1) + (dl2 - dl1) * (dl2 - dl1));
     }
 
-    public ExecLocation getLastExecLocation(String appName, String methodName) {
+    ExecLocation getLastExecLocation(String appName, String methodName) {
         Deque<DBEntry> results = dbCache.getAllEntriesFilteredOn(appName, methodName);
         return results.getFirst().getExecLocation();
     }
 
-    public long getLastExecDuration(String appName, String methodName) {
+    long getLastExecDuration(String appName, String methodName) {
         Deque<DBEntry> results = dbCache.getAllEntriesFilteredOn(appName, methodName);
         return results.getFirst().getExecDuration();
     }

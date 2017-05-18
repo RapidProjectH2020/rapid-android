@@ -13,7 +13,7 @@ ext {
     siteUrl = 'https://github.com/RapidProjectH2020/rapid-android'
     gitUrl = 'https://github.com/RapidProjectH2020/rapid-android.git'
 
-    libraryVersion = '0.0.1'
+    libraryVersion = '0.0.2'
 
     developerId = 'rapidprojecth2020'
     developerName = 'Rapid EU Project'
@@ -26,7 +26,7 @@ ext {
 
 android {
     compileSdkVersion 25
-    buildToolsVersion "25.0.2"
+    buildToolsVersion "25.0.3"
 
     defaultConfig {
         minSdkVersion 19
