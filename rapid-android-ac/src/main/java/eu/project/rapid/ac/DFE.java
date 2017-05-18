@@ -594,7 +594,7 @@ public class DFE {
 
                 Log.i(TAG, "Connecting in CLEAR with AS on: " + sClone.getIp() + ":" + sClone.getPort());
                 s = new Socket();
-                s.connect(new InetSocketAddress(sClone.getIp(), sClone.getPort()), 10 * 1000);
+                s.connect(new InetSocketAddress(sClone.getIp(), sClone.getPort()), 5 * 1000);
 
                 os = s.getOutputStream();
                 is = s.getInputStream();
@@ -636,7 +636,9 @@ public class DFE {
 
                 Log.i(TAG, "Connecting in SSL with clone: " + sClone.getIp() + ":" + sClone.getSslPort());
 
-                s = config.getSslFactory().createSocket(sClone.getIp(), sClone.getSslPort());
+                s = config.getSslFactory().createSocket(); //.createSocket(sClone.getIp(), sClone.getSslPort());
+                s.connect(new InetSocketAddress(sClone.getIp(), sClone.getSslPort()), 5 * 1000);
+
                 // Log.i(TAG, "getEnableSessionCreation: " + ((SSLSocket)
                 // sSocket).getEnableSessionCreation());
                 // ((SSLSocket) sSocket).setEnableSessionCreation(false);
