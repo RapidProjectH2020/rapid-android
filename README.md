@@ -6,5 +6,4 @@ While RAPID envisions to support heterogeneous devices, this is the component th
 We have provided some initial demo applications together with instructions on how to use the library.
 Check them on the [RAPID Android Demo](https://github.com/RapidProjectH2020/rapid-android-DemoApp) repository. 
 
-If you are interested on Java and CUDA code offloading on other platforms,
-have a look at the generic [RAPID Linux/Windows Framework](https://github.com/RapidProjectH2020/rapid-linux).
+For Java and CUDA code offloading on other platforms, have a look at the generic [RAPID Linux/Windows Framework](https://github.com/RapidProjectH2020/rapid-linux).
