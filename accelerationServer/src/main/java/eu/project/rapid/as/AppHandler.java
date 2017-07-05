@@ -80,8 +80,8 @@ public class AppHandler implements Runnable {
     private final Context mContext;
     private final int BUFFER = 8192;
 
-    private static int numberOfCloneHelpers = 0; // The number of clone helpers requested (not considering the
-    // False otherwise.
+    // The number of clone helpers requested (not considering the main VM)
+    private static int numberOfCloneHelpers = 0;
     private Boolean[] pausedHelper; // Needed for synchronization with the clone helpers
     private int requestFromMainServer = 0; // The main clone sends commands to the clone helpers
     private Object responsesFromServers; // Array of partial results returned by the clone helpers
@@ -619,15 +619,10 @@ public class AppHandler implements Runnable {
                 }
             }
 
-//            objToExecute = null;
-
             // If this is the main clone send back also the object to execute,
             // otherwise the helper clones don't need to send it back.
             if (cloneHelperId == 0) {
-                // If we choose to also send back the object then the nr of bytes will increase.
-                // If necessary just uncomment the line below.
                 return new ResultContainer(objToExecute, result, getObjectDuration, execDuration);
-//                return new ResultContainer(null, result, getObjectDuration, execDuration);
             } else {
                 return new ResultContainer(null, result, getObjectDuration, execDuration);
             }
@@ -691,10 +686,10 @@ public class AppHandler implements Runnable {
     }
 
     /**
-     * Connect to the manager and ask for more clones.<br>
-     * The manager will reply with the IP address of the clones<br>
+     * Connect to the DS and ask for more VMs.<br>
+     * The DS will reply with the IP address of the VMs<br>
      * <p>
-     * Launch the threads to connect to the other clones.<br>
+     * Launch the threads to connect to the other VMs.<br>
      */
     private boolean connectToServerHelpers() {
 
@@ -706,31 +701,29 @@ public class AppHandler implements Runnable {
 
         try {
 
-            Log.d(TAG, "Trying to connect to the manager: " + config.getVmmIp());
+            Log.d(TAG, "Trying to connect to the DS - " + config.getDSIp() + ":" + config.getDSPort());
 
             // Connect to the directory service
-            socket = new Socket(config.getVmmIp(), config.getVmmPort());
+            socket = new Socket(config.getDSIp(), config.getDSPort());
             os = socket.getOutputStream();
             is = socket.getInputStream();
-
-            Log.d(TAG, "Connection established whith directory service " + config.getVmmIp() + ":"
-                    + config.getVmmPort());
-
-            // Tell DirService that this is a clone connecting
-            os.write(RapidMessages.CLONE_CONNECTION);
 
             oos = new ObjectOutputStream(os);
             ois = new ObjectInputStream(is);
 
-            // Ask for more clones
+            Log.d(TAG, "Connection established with the DS - " + config.getDSIp() + ":"
+                    + config.getDSPort());
+
+            // Ask for helper VMs
             os.write(RapidMessages.PARALLEL_REQ);
-            oos.writeInt(config.getCloneId());
+//            oos.writeInt(config.getCloneId()); // Old implementation...
+            oos.writeLong(AccelerationServer.vmId);
             oos.writeInt(numberOfCloneHelpers);
             oos.flush();
 
             ArrayList<Clone> cloneHelpers = (ArrayList<Clone>) ois.readObject();
             if (cloneHelpers.size() != numberOfCloneHelpers) {
-                Log.i(TAG, "The directory service could not start the needed clones, actually started: "
+                Log.i(TAG, "The DS could not start the needed clones, actually started: "
                         + cloneHelpers.size());
                 return false;
             }
@@ -794,7 +787,7 @@ public class AppHandler implements Runnable {
 
             try {
 
-                // Try to connect to the clone helper.
+                // Try to connect to the VM helper.
                 // If it is not possible to connect stop running.
                 if (!establishConnection()) {
                     // Try to close created sockets
@@ -869,12 +862,12 @@ public class AppHandler implements Runnable {
                             break;
 
                         case RapidMessages.AC_OFFLOAD_REQ_AS:
-                            Log.d(TAG, "Asking clone " + clone.getIp() + " to parallelize the execution");
+                            Log.d(TAG, "Asking VM " + clone.getIp() + " to parallelize the execution");
 
                             mOutStream.write(RapidMessages.AC_OFFLOAD_REQ_AS);
 
-                            // Send the number of clones needed.
-                            // Since this is a helper clone, only one clone should be requested.
+                            // Send the number of VMs needed.
+                            // Since this is a helper VM, only one clone should be requested.
                             mObjOutStream.writeInt(1);
                             mObjOutStream.writeObject(objToExecute);
                             mObjOutStream.writeObject(methodName);
@@ -962,5 +955,4 @@ public class AppHandler implements Runnable {
             RapidUtils.closeQuietly(mSocket);
         }
     }
-
 }

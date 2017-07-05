@@ -45,7 +45,6 @@ import java.security.KeyStoreException;
 import java.security.NoSuchAlgorithmException;
 import java.security.PrivateKey;
 import java.security.PublicKey;
-import java.security.Security;
 import java.security.UnrecoverableKeyException;
 import java.security.cert.Certificate;
 import java.security.cert.CertificateException;
@@ -77,8 +76,9 @@ public class AccelerationServer extends Service {
     private static final String TAG = "AccelerationServer";
     private Configuration config;
 
-    private static long userId = -1; // The userId will be given by the VMM
-    private static String vmIp = ""; // The vmIp should be extracted by us
+    static long userId = -1; // The userId will be given by the VMM
+    static long vmId = -1; // The vmId will be assigned by the DS
+    static String vmIp = ""; // The vmIp should be extracted by us
 
     private Handler mBroadcastHandler;
     private Runnable mBroadcastRunnable;
@@ -86,9 +86,9 @@ public class AccelerationServer extends Service {
     static String arch = System.getProperty("os.arch");
 
     // Using the BC
-    static {
-        Security.insertProviderAt(new org.spongycastle.jce.provider.BouncyCastleProvider(), 1);
-    }
+//    static {
+//        Security.insertProviderAt(new org.spongycastle.jce.provider.BouncyCastleProvider(), 1);
+//    }
 
     /**
      * Called when the service is first created.
@@ -378,7 +378,7 @@ public class AccelerationServer extends Service {
                 byte status = dsIn.readByte();
                 System.out.println("Return Status: " + (status == RapidMessages.OK ? "OK" : "ERROR"));
                 if (status == RapidMessages.OK) {
-                    long vmId = dsIn.readLong();
+                    vmId = dsIn.readLong();
                     Log.i(TAG, "Received vmId: " + vmId);
                     return true;
                 }

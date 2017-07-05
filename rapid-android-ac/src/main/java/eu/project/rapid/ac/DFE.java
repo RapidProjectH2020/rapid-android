@@ -51,7 +51,6 @@ import java.security.UnrecoverableKeyException;
 import java.security.cert.Certificate;
 import java.security.cert.CertificateException;
 import java.util.Iterator;
-import java.util.Set;
 import java.util.TreeSet;
 import java.util.concurrent.BlockingDeque;
 import java.util.concurrent.CountDownLatch;
@@ -59,7 +58,6 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.LinkedBlockingDeque;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import javax.net.ssl.HandshakeCompletedEvent;
@@ -77,7 +75,6 @@ import eu.project.rapid.ac.profilers.NetworkProfiler;
 import eu.project.rapid.ac.profilers.Profiler;
 import eu.project.rapid.ac.profilers.ProgramProfiler;
 import eu.project.rapid.ac.utils.Constants;
-import eu.project.rapid.ac.utils.Utils;
 import eu.project.rapid.common.Clone;
 import eu.project.rapid.common.Configuration;
 import eu.project.rapid.common.RapidConstants.COMM_TYPE;
@@ -123,7 +120,7 @@ public class DFE {
     private static ScheduledThreadPoolExecutor d2dSetReaderThread;
 
     private static ExecutorService threadPool;
-    private static Set<PhoneSpecs> d2dSetPhones = new TreeSet<>();
+    private static TreeSet<PhoneSpecs> d2dSetPhones = new TreeSet<>();
     private static BlockingDeque<Task> tasks = new LinkedBlockingDeque<>();
     private static AtomicInteger taskId = new AtomicInteger();
     private static SparseArray<BlockingDeque<Object>> tasksResultsMap = new SparseArray<>();
@@ -175,6 +172,7 @@ public class DFE {
         rapidBroadcastReceiver = new RapidBroadcastReceiver();
         IntentFilter filter = new IntentFilter(RapidNetworkService.RAPID_NETWORK_CHANGED);
         filter.addAction(RapidNetworkService.RAPID_VM_CHANGED);
+        filter.addAction(RapidNetworkService.RAPID_D2D_SET_CHANGED);
         mContext.registerReceiver(rapidBroadcastReceiver, filter);
 
         Log.i(TAG, "Current device: " + myPhoneSpecs);
@@ -195,7 +193,6 @@ public class DFE {
 
         // Start the service that will deal with the D2D communication
         startD2DListeningService();
-        startD2DThread();
 
         // Show a spinning dialog while connecting to the Manager and to the clone.
         this.pd = ProgressDialog.show(mContext, "Working...", "Initial network tasks...", true, false);
@@ -279,13 +276,15 @@ public class DFE {
 
             // Read the CA certificate
             KeyStore trustStore = KeyStore.getInstance("BKS");
-            trustStore.load(new FileInputStream(Constants.SSL_CA_TRUSTSTORE), Constants.SSL_DEFAULT_PASSW.toCharArray());
+//            trustStore.load(new FileInputStream(Constants.SSL_CA_TRUSTSTORE), Constants.SSL_DEFAULT_PASSW.toCharArray());
+            trustStore.load(mContext.getAssets().open("ca_truststore.bks"), Constants.SSL_DEFAULT_PASSW.toCharArray());
             TrustManagerFactory trustManagerFactory = TrustManagerFactory.getInstance(KeyManagerFactory.getDefaultAlgorithm());
             trustManagerFactory.init(trustStore);
 
             // Read my certificate
             KeyStore keyStore = KeyStore.getInstance("BKS");
-            keyStore.load(new FileInputStream(Constants.SSL_KEYSTORE), Constants.SSL_DEFAULT_PASSW.toCharArray());
+            keyStore.load(mContext.getAssets().open("keystore.bks"), Constants.SSL_DEFAULT_PASSW.toCharArray());
+//            keyStore.load(new FileInputStream(Constants.SSL_KEYSTORE), Constants.SSL_DEFAULT_PASSW.toCharArray());
             KeyManagerFactory kmf = KeyManagerFactory.getInstance(KeyManagerFactory.getDefaultAlgorithm());
             kmf.init(keyStore, Constants.SSL_DEFAULT_PASSW.toCharArray());
 
@@ -321,31 +320,24 @@ public class DFE {
         @Override
         protected Void doInBackground(Clone... clone) {
             if (clone[0] == null) {
+
                 publishProgress("Getting info from the AC_RM...");
-                boolean connectedWithAcRm = false;
                 int maxNrTimes = 3;
                 int count = 0;
+                boolean connectedWithAcRm = false;
+                Socket acRmSocket = null;
+
                 do {
-                    Log.v(TAG, "Connecting with AC_RM for getting info...");
-                    try (Socket acRmSocket = new Socket(InetAddress.getLocalHost(), 23456);
-                         OutputStream os = acRmSocket.getOutputStream();
-                         InputStream is = acRmSocket.getInputStream();
-                         ObjectOutputStream oos = new ObjectOutputStream(os);
-                         ObjectInputStream ois = new ObjectInputStream(is)) {
+                    Log.v(TAG, "Connecting with AC_RM...");
 
-                        os.write(1);
-                        sClone = (Clone) ois.readObject();
-                        config.setClone(sClone);
-
-                        os.write(2);
-                        NetworkProfiler.setUlRate(ois.readInt());
-                        NetworkProfiler.setDlRate(ois.readInt());
-                        NetworkProfiler.setRtt(ois.readInt());
-
+                    try {
+                        acRmSocket = new Socket();
+                        acRmSocket.connect(new InetSocketAddress(InetAddress.getLocalHost(),
+                                RapidNetworkService.AC_RM_PORT), 2000);
                         connectedWithAcRm = true;
-
-                    } catch (IOException | ClassNotFoundException e) {
-                        Log.e(TAG, "Could not connect with AC_RM for getting info: " + e);
+                        Log.i(TAG, "Connected with AC_RM!");
+                    } catch (IOException e) {
+                        Log.e(TAG, "Could not connect with AC_RM: " + e);
                         try {
                             Thread.sleep(1000);
                         } catch (InterruptedException e1) {
@@ -354,9 +346,30 @@ public class DFE {
                     } finally {
                         count++;
                     }
+
                 } while (!connectedWithAcRm && count < maxNrTimes);
+
+                if (connectedWithAcRm) {
+                    Log.i(TAG, "Connection with AC_RM was successful, trying to get the needed info...");
+                    try (OutputStream os = acRmSocket.getOutputStream();
+                         InputStream is = acRmSocket.getInputStream();
+                         ObjectOutputStream oos = new ObjectOutputStream(os);
+                         ObjectInputStream ois = new ObjectInputStream(is)) {
+
+                        os.write(RapidNetworkService.AC_GET_VM);
+                        sClone = (Clone) ois.readObject();
+                        config.setClone(sClone);
+
+                        os.write(RapidNetworkService.AC_GET_NETWORK_MEASUREMENTS);
+                        NetworkProfiler.setUlRate(ois.readInt());
+                        NetworkProfiler.setDlRate(ois.readInt());
+                        NetworkProfiler.setRtt(ois.readInt());
+                    } catch (IOException | ClassNotFoundException e) {
+                        Log.e(TAG, "AC_RM could not provide the needed info: " + e);
+                    }
+                }
             } else {
-                publishProgress("Using the clone given by the user: " + clone[0]);
+                publishProgress("Using the VM given by the user: " + clone[0]);
                 sClone = clone[0];
                 config.setClone(sClone);
                 NetworkProfiler.measureUlRate(sClone.getIp(), sClone.getClonePortBandwidthTest());
@@ -397,7 +410,6 @@ public class DFE {
         protected void onPreExecute() {
             Log.i(TAG, "Started initial network tasks");
         }
-
     }
 
     public void onDestroy() {
@@ -419,33 +431,6 @@ public class DFE {
         Log.i(TAG, "Starting the D2D listening service...");
         Intent d2dServiceIntent = new Intent(mContext, RapidNetworkService.class);
         mContext.startService(d2dServiceIntent);
-    }
-
-    private void startD2DThread() {
-        // This thread will run with a certain frequency to read the D2D devices that are written by the
-        // RapidNetworkService on the sdcard. This is needed because another DFE may have written the
-        // devices on the file.
-        d2dSetReaderThread.scheduleWithFixedDelay(new D2DSetReader(), 0,
-                RapidNetworkService.FREQUENCY_READ_D2D_SET, TimeUnit.MILLISECONDS);
-    }
-
-    private class D2DSetReader implements Runnable {
-
-        @SuppressWarnings("unchecked")
-        @Override
-        public void run() {
-            try {
-                Log.i(TAG, "Reading the saved D2D phones...");
-                d2dSetPhones = (Set<PhoneSpecs>) Utils.readObjectFromFile(Constants.FILE_D2D_PHONES);
-
-                Log.i(TAG, "List of D2D phones:");
-                for (PhoneSpecs p : d2dSetPhones) {
-                    Log.i(TAG, p.toString());
-                }
-            } catch (IOException | ClassNotFoundException e) {
-                Log.e(TAG, "Error on D2DSetReader while trying to read the saved set of D2D phones: " + e);
-            }
-        }
     }
 
     /**
@@ -518,7 +503,7 @@ public class DFE {
         private ObjectInputStream ois;
         private ObjectOutputStream oos;
 
-        public TaskRunner(int id) {
+        TaskRunner(int id) {
             TAG = "DFE-TaskRunner-" + id;
         }
 
@@ -668,11 +653,11 @@ public class DFE {
                 return onLineSSL = true;
 
             } catch (UnknownHostException e) {
-                fallBackToLocalExecution("UnknownHostException - Connection setup to server failed: " + e);
+                fallBackToLocalExecution("UnknownHostException - SSL Connection setup to server failed: " + e);
             } catch (IOException e) {
-                fallBackToLocalExecution("IOException - Connection setup to server failed: " + e);
+                fallBackToLocalExecution("IOException - SSL Connection setup to server failed: " + e);
             } catch (Exception e) {
-                fallBackToLocalExecution("Exception - Connection setup to server failed: " + e);
+                fallBackToLocalExecution("Exception - SSL Connection setup to server failed: " + e);
             } finally {
                 onLineClear = false;
             }
@@ -1061,6 +1046,11 @@ public class DFE {
                 case RapidNetworkService.RAPID_VM_CHANGED:
                     sClone = (Clone) intent.getSerializableExtra(RapidNetworkService.RAPID_VM_IP);
                     config.setClone(sClone);
+                    break;
+
+                case RapidNetworkService.RAPID_D2D_SET_CHANGED:
+                    d2dSetPhones = (TreeSet<PhoneSpecs>)
+                            intent.getSerializableExtra(RapidNetworkService.RAPID_D2D_SET);
                     break;
             }
         }

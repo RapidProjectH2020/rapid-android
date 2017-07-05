@@ -26,204 +26,195 @@ import eu.project.rapid.ac.utils.Utils;
 /**
  * This object contains the specifics of a phone. In a D2D communication scenario, we will receive
  * the specifics from the nearby phones and will sort them based on CPU, memory, GPU.<br>
- * 
- * @author sokol
  *
+ * @author sokol
  */
 public class PhoneSpecs implements Serializable, Comparable<PhoneSpecs> {
-  private static final long serialVersionUID = -4918806738265004873L;
+    private static final long serialVersionUID = -4918806738265004873L;
 
-  private static final String TAG = "PhoneSpecs";
+    private static final String TAG = "PhoneSpecs";
 
-  private String phoneId;
-  private long timestamp; // TimeStamp to be used by the clients as a mean to measure the freshness
-                          // of this phone
-  private String ip;
-  private int nrCPUs; // number of CPU cores
-  private int cpuFreqKHz; // CPU frequency in KHz
-  private int ramMB; // Memory in MB
-  private boolean hasGpu;
+    private String phoneId;
+    private long timestamp; // TimeStamp to be used by the clients as a mean to measure the freshness
+    // of this phone
+    private String ip;
+    private int nrCPUs; // number of CPU cores
+    private int cpuFreqKHz; // CPU frequency in KHz
+    private int ramMB; // Memory in MB
+    private boolean hasGpu;
 
-  private static PhoneSpecs phoneSpecs;
+    private static PhoneSpecs phoneSpecs;
 
-  /**
-   * @param context Context of the application calling this method.
-   */
-  private PhoneSpecs(Context context) throws NullPointerException {
-    if (context == null) {
-      throw new NullPointerException("Context cannot be null");
-    }
+    /**
+     * @param context Context of the application calling this method.
+     */
+    private PhoneSpecs(Context context) throws NullPointerException {
+        if (context == null) {
+            throw new NullPointerException("Context cannot be null");
+        }
 
-    // FIXME: On Android 6 we can't just read the ID directly, we need to ask for runtime
-    // permission.
+        // FIXME: On Android 6 we can't just read the ID directly, we need to ask for runtime
+        // permission.
 //    phoneId = Utils.getDeviceIdHashHex(context);
-    phoneId = String.valueOf(new Random().nextLong());
-    nrCPUs = Utils.getDeviceNrCPUs();
-    cpuFreqKHz = Utils.getDeviceCPUFreq();
-    try {
-      ip = Utils.getIpAddress().getHostAddress();
-    } catch (Exception e) {
-      Log.w(TAG,
-          "Error while getting the IP (most probably we are not connected to WiFi network): " + e);
-    }
-  }
-
-  public static PhoneSpecs getPhoneSpecs(Context context) {
-    if (phoneSpecs == null) {
-      phoneSpecs = new PhoneSpecs(context);
+        phoneId = String.valueOf(new Random().nextLong());
+        nrCPUs = Utils.getDeviceNrCPUs();
+        cpuFreqKHz = Utils.getDeviceCPUFreq();
+        try {
+            ip = Utils.getIpAddress().getHostAddress();
+        } catch (Exception e) {
+            Log.w(TAG,
+                    "Error while getting the IP (most probably we are not connected to WiFi network): " + e);
+        }
     }
 
-    return phoneSpecs;
-  }
+    public static PhoneSpecs getPhoneSpecs(Context context) {
+        if (phoneSpecs == null) {
+            phoneSpecs = new PhoneSpecs(context);
+        }
 
-  /**
-   * @return the phoneId
-   */
-  public String getPhoneId() {
-    return phoneId;
-  }
-
-  /**
-   * @param phoneId the phoneId to set
-   */
-  public void setPhoneId(String phoneId) {
-    this.phoneId = phoneId;
-  }
-
-  /**
-   * @return the timestamp
-   */
-  public long getTimestamp() {
-    return timestamp;
-  }
-
-  /**
-   * @param timestamp the timestamp to set
-   */
-  public void setTimestamp(long timestamp) {
-    this.timestamp = timestamp;
-  }
-
-  /**
-   * @return the ip
-   */
-  public String getIp() {
-    return ip;
-  }
-
-  /**
-   * @param ip the ip to set
-   */
-  public void setIp(String ip) {
-    this.ip = ip;
-  }
-
-  /**
-   * @return the nrCPUs
-   */
-  public int getNrCPUs() {
-    return nrCPUs;
-  }
-
-  /**
-   * @param nrCPUs the nrCPUs to set
-   */
-  public void setNrCPUs(int nrCPUs) {
-    this.nrCPUs = nrCPUs;
-  }
-
-  /**
-   * @return the cpuFreqKHz
-   */
-  public int getCpuPowerKHz() {
-    return cpuFreqKHz;
-  }
-
-  /**
-   * @param cpuPowerKHz
-   */
-  public void setCpuPowerKHz(int cpuPowerKHz) {
-    this.cpuFreqKHz = cpuPowerKHz;
-  }
-
-  /**
-   * @return the ramMB
-   */
-  public int getRamMB() {
-    return ramMB;
-  }
-
-  /**
-   * @param ramMB the ramMB to set
-   */
-  public void setRamMB(int ramMB) {
-    this.ramMB = ramMB;
-  }
-
-  /**
-   * @return the hasGpu
-   */
-  public boolean isHasGpu() {
-    return hasGpu;
-  }
-
-  /**
-   * @param hasGpu the hasGpu to set
-   */
-  public void setHasGpu(boolean hasGpu) {
-    this.hasGpu = hasGpu;
-  }
-
-  @Override
-  public int hashCode() {
-    final int prime = 31;
-    int result = prime + ((phoneId == null) ? 0 : phoneId.hashCode());
-    return result;
-  }
-
-  @Override
-  public boolean equals(Object obj) {
-    if (this == obj) {
-      return true;
-    }
-    if (obj == null) {
-      return false;
-    }
-    if (getClass() != obj.getClass()) {
-      return false;
+        return phoneSpecs;
     }
 
-    final PhoneSpecs other = (PhoneSpecs) obj;
-    if (phoneId == other.phoneId) {
-      return true;
+    /**
+     * @return the phoneId
+     */
+    public String getPhoneId() {
+        return phoneId;
     }
 
-    return false;
-  }
-
-
-  @Override
-  public int compareTo(PhoneSpecs otherPhone) {
-    if (otherPhone == null) {
-      return 1;
+    /**
+     * @param phoneId the phoneId to set
+     */
+    public void setPhoneId(String phoneId) {
+        this.phoneId = phoneId;
     }
 
-    if (this.phoneId == otherPhone.phoneId) {
-      return 0;
+    /**
+     * @return the timestamp
+     */
+    public long getTimestamp() {
+        return timestamp;
     }
 
-    if (this.nrCPUs > otherPhone.nrCPUs || this.cpuFreqKHz > otherPhone.cpuFreqKHz) {
-      return 1;
-    } else if (this.cpuFreqKHz < otherPhone.cpuFreqKHz) {
-      return -1;
-    } else {
-      return this.ramMB - otherPhone.ramMB;
+    /**
+     * @param timestamp the timestamp to set
+     */
+    public void setTimestamp(long timestamp) {
+        this.timestamp = timestamp;
     }
-  }
 
-  @Override
-  public String toString() {
-    return "ID=" + this.phoneId + ", nrCPUs=" + this.nrCPUs + ", CPU=" + this.cpuFreqKHz + " KHz"
-        + ", RAM=" + this.ramMB + " MB" + ", GPU=" + this.hasGpu + ", IP=" + this.ip;
-  }
+    /**
+     * @return the ip
+     */
+    public String getIp() {
+        return ip;
+    }
+
+    /**
+     * @param ip the ip to set
+     */
+    public void setIp(String ip) {
+        this.ip = ip;
+    }
+
+    /**
+     * @return the nrCPUs
+     */
+    public int getNrCPUs() {
+        return nrCPUs;
+    }
+
+    /**
+     * @param nrCPUs the nrCPUs to set
+     */
+    public void setNrCPUs(int nrCPUs) {
+        this.nrCPUs = nrCPUs;
+    }
+
+    /**
+     * @return the cpuFreqKHz
+     */
+    public int getCpuPowerKHz() {
+        return cpuFreqKHz;
+    }
+
+    /**
+     * @param cpuPowerKHz
+     */
+    public void setCpuPowerKHz(int cpuPowerKHz) {
+        this.cpuFreqKHz = cpuPowerKHz;
+    }
+
+    /**
+     * @return the ramMB
+     */
+    public int getRamMB() {
+        return ramMB;
+    }
+
+    /**
+     * @param ramMB the ramMB to set
+     */
+    public void setRamMB(int ramMB) {
+        this.ramMB = ramMB;
+    }
+
+    /**
+     * @return the hasGpu
+     */
+    public boolean isHasGpu() {
+        return hasGpu;
+    }
+
+    /**
+     * @param hasGpu the hasGpu to set
+     */
+    public void setHasGpu(boolean hasGpu) {
+        this.hasGpu = hasGpu;
+    }
+
+    @Override
+    public int hashCode() {
+        final int prime = 31;
+        return prime + ((phoneId == null) ? 0 : phoneId.hashCode());
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+        if (this == obj) {
+            return true;
+        }
+        if (obj == null) {
+            return false;
+        }
+        if (getClass() != obj.getClass()) {
+            return false;
+        }
+
+        final PhoneSpecs other = (PhoneSpecs) obj;
+        return this.phoneId.equals(other.phoneId);
+    }
+
+
+    @Override
+    public int compareTo(PhoneSpecs otherPhone) {
+
+        if (this.phoneId.equals(otherPhone.phoneId)) {
+            return 0;
+        }
+
+        if (this.nrCPUs > otherPhone.nrCPUs || this.cpuFreqKHz > otherPhone.cpuFreqKHz) {
+            return 1;
+        } else if (this.cpuFreqKHz < otherPhone.cpuFreqKHz) {
+            return -1;
+        } else {
+            return this.ramMB - otherPhone.ramMB;
+        }
+    }
+
+    @Override
+    public String toString() {
+        return "ID=" + this.phoneId + ", nrCPUs=" + this.nrCPUs + ", CPU=" + this.cpuFreqKHz + " KHz"
+                + ", RAM=" + this.ramMB + " MB" + ", GPU=" + this.hasGpu + ", IP=" + this.ip;
+    }
 }

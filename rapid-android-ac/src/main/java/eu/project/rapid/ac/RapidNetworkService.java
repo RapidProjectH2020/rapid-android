@@ -37,11 +37,14 @@ import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.ArrayList;
 import java.util.Iterator;
-import java.util.Set;
+import java.util.LinkedList;
+import java.util.List;
 import java.util.TreeSet;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import eu.project.rapid.ac.d2d.D2DMessage;
 import eu.project.rapid.ac.d2d.D2DMessage.MsgType;
@@ -53,6 +56,9 @@ import eu.project.rapid.common.Clone;
 import eu.project.rapid.common.Configuration;
 import eu.project.rapid.common.RapidConstants;
 import eu.project.rapid.common.RapidMessages;
+import eu.project.rapid.common.RapidUtils;
+
+import static android.util.Log.i;
 
 /**
  * This thread will be started by clients that run the DFE so that these clients can get the HELLO
@@ -63,11 +69,19 @@ import eu.project.rapid.common.RapidMessages;
 public class RapidNetworkService extends IntentService {
 
     private static final String TAG = RapidNetworkService.class.getName();
+
+    static final int AC_RM_PORT = 23456;
+
+    static final int AC_GET_VM = 1;
+    static final int AC_GET_NETWORK_MEASUREMENTS = 2;
+    static final int AC_QOS_PARAMS = 3;
+
     ScheduledThreadPoolExecutor setWriterScheduledPool =
             (ScheduledThreadPoolExecutor) Executors.newScheduledThreadPool(1);
-    static final int FREQUENCY_WRITE_D2D_SET = 5 * 60 * 1013; // Every 5 minutes save the set
-    public static final int FREQUENCY_READ_D2D_SET = 1 * 60 * 1011; // Every 1 minute read the set
-    private Set<PhoneSpecs> setD2dPhones = new TreeSet<>(); // Sorted by specs
+    static final int FREQUENCY_WRITE_D2D_SET = 1 * 60 * 1013; // Every 5 minutes broadcast the set
+    private TreeSet<PhoneSpecs> setD2dPhones = new TreeSet<>(); // Sorted by specs
+    public static final String RAPID_D2D_SET_CHANGED = "eu.project.rapid.d2dSetUpdate"; // Broadcast intent
+    public static final String RAPID_D2D_SET = "eu.project.rapid.d2dSet"; // Intent extra
 
     ScheduledThreadPoolExecutor netScheduledPool =
             (ScheduledThreadPoolExecutor) Executors.newScheduledThreadPool(2);
@@ -100,9 +114,14 @@ public class RapidNetworkService extends IntentService {
     protected void onHandleIntent(Intent intent) {
         Log.d(TAG, "Started the service");
 
-        try (ServerSocket acRmServerSocket = new ServerSocket(23456)) {
+        try (ServerSocket acRmServerSocket = new ServerSocket(AC_RM_PORT)) {
             Log.d(TAG, "************* Started the AC_RM listening server ****************");
             readConfigurationFile();
+            String qosParams = readQosParams().replace(" ", "").replace("\n", "");
+            String jsonQosParams = parseQosParams(qosParams);
+            Log.v(TAG, "QoS params: " + qosParams);
+            Log.v(TAG, "QoS params in JSON: " + jsonQosParams);
+
             // The prev id is useful to the DS so that it can release already allocated VMs.
             SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(getApplicationContext());
             myId = prefs.getLong(Constants.MY_OLD_ID, -1);
@@ -143,6 +162,121 @@ public class RapidNetworkService extends IntentService {
         }
     }
 
+    /**
+     * <p>Read the xml file with the QoS parameters, which has been created by the RAPID Compiler.</p>
+     * <p>The format of the file is this one:</p>
+     *
+     * <pre>
+     *     {@code
+     * <application>
+            <name>TODO</name>
+            <class>
+                <name>/Users/sokol/Desktop/test/demo/JniTest.java</name>
+                <method>
+                    <name>localjniCaller</name>
+                    <Remote>
+                        <computeIntensive>true</computeIntensive>
+                    </Remote>
+                    <QoS>
+                        <term>cpu</term>
+                        <operator>ge</operator>
+                        <threshold>1200</threshold>
+                        <term>ram</term>
+                        <operator>ge</operator>
+                        <threshold>500</threshold>
+                    </QoS>
+                </method>
+            </class>
+            ...
+     *
+     *      }
+     * </pre>
+     *
+     * @return The content of the xml file as a string.
+     */
+    private String readQosParams () {
+        String qosParams = "";
+        try {
+            qosParams = Utils.readAssetFileAsString(getApplicationContext(), Constants.QOS_FILENAME);
+        } catch (IOException e) {
+            Log.w(TAG, "Could not find QoS file - " + e);
+        }
+
+        return qosParams;
+    }
+
+    /**
+     *
+     * @param qosParams The string containing the xml QoS. We assume the QoS parameters are correct
+     *                  (meaning that we do not perform error checking here, in terms of:
+     *                  naming of QoS parameters, formatting of the QoS parameters, etc.).
+     * @return The parsed string, converted then in json format:
+     * {"QoS":[{"operator":"CPU_UTIL", "term":"LT", "threshold":60}, {"operator":"ram_util", "term":"lt", "threshold":1024}]}
+     */
+    private String parseQosParams(String qosParams) {
+        StringBuilder jsonQosParams = new StringBuilder();
+        jsonQosParams.append("{\"QoS\":[");
+        List<String> terms = new LinkedList<>();
+        List<String> operators = new LinkedList<>();
+        List<String> thresholds = new LinkedList<>();
+
+        // Remove all spaces and new lines
+        qosParams = readQosParams().replace(" ", "").replace("\n", "");
+
+        // Search for substrings starting with <QoS> and ending with </QoS>, excluding these tags
+        Pattern qosPattern = Pattern.compile("(<QoS>(.*?)</QoS>)");
+        Matcher qosMatcher = qosPattern.matcher(qosParams);
+
+        Pattern termPattern = Pattern.compile("(<term>(.*?)</term>)");
+        Pattern operatorPattern = Pattern.compile("(<operator>(.*?)</operator>)");
+        Pattern thresholdPattern = Pattern.compile("(<threshold>(.*?)</threshold>)");
+
+        while (qosMatcher.find()) {
+            // Log.i(TAG, qosMatcher.group(2));
+            // <term>cpu</term><operator>ge</operator><threshold>1500</threshold><term>ram</term><operator>ge</operator><threshold>1000</threshold>
+            String qosString = qosMatcher.group(2);
+            Matcher termMatcher = termPattern.matcher(qosString);
+            Matcher operatorMatcher = operatorPattern.matcher(qosString);
+            Matcher thresholdMatcher = thresholdPattern.matcher(qosString);
+
+            while (termMatcher.find()) {
+                terms.add(termMatcher.group(2));
+            }
+
+            while (operatorMatcher.find()) {
+                operators.add(operatorMatcher.group(2));
+            }
+
+            while (thresholdMatcher.find()) {
+                thresholds.add(thresholdMatcher.group(2));
+            }
+        }
+
+        if (terms.size() != operators.size() || terms.size() != thresholds.size()) {
+            Log.w(TAG, "QoS params not correctly formatted: number of terms, operators, and thresholds differ!");
+        } else {
+            for (int i = 0; i < terms.size(); i++) {
+                jsonQosParams.append("{");
+                jsonQosParams.append("\"term\":\"").append(terms.get(i)).append("\", ");
+                jsonQosParams.append("\"operator\":\"").append(operators.get(i)).append("\", ");
+                jsonQosParams.append("\"threshold\":");
+                String th = thresholds.get(i);
+                if (RapidUtils.isNumeric(th)) {
+                    jsonQosParams.append(thresholds.get(i));
+                } else {
+                    jsonQosParams.append("\"").append(thresholds.get(i)).append("\"");
+                }
+                jsonQosParams.append("}");
+                if (i < terms.size() - 1) {
+                    jsonQosParams.append(", ");
+                }
+            }
+        }
+
+        jsonQosParams.append("]}");
+        return jsonQosParams.toString();
+    }
+
     private class D2DListener implements Runnable {
         private final String TAG = D2DListener.class.getName();
 
@@ -150,29 +284,31 @@ public class RapidNetworkService extends IntentService {
         public void run() {
 
             try {
-                Log.i(TAG, "Thread started");
-                writeSetOnFile();
+                i(TAG, "Thread started");
+//                writeSetOnFile();
+                broadcastD2dDevices();
 
-                WifiManager.MulticastLock lock = null;
-                WifiManager wifi = (WifiManager) getSystemService(Context.WIFI_SERVICE);
-                Log.i(TAG, "Trying to acquire multicast lock...");
+                WifiManager.MulticastLock lock;
+                WifiManager wifi = (WifiManager) getApplicationContext().
+                        getSystemService(Context.WIFI_SERVICE);
+                i(TAG, "Trying to acquire multicast lock...");
                 if (Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.KITKAT) {
                     if (wifi != null) {
                         lock = wifi.createMulticastLock("WiFi_Lock");
                         lock.setReferenceCounted(true);
                         lock.acquire();
-                        Log.i(TAG, "Lock acquired!");
+                        i(TAG, "Lock acquired!");
                     }
                 }
 
                 MulticastSocket receiveSocket = new MulticastSocket(Constants.D2D_BROADCAST_PORT);
                 receiveSocket.setBroadcast(true);
-                Log.i(TAG, "Started listening on multicast socket.");
+                i(TAG, "Started listening on multicast socket.");
 
                 try {
                     // This will be interrupted when the OS kills the service
                     while (true) {
-                        Log.i(TAG, "Waiting for broadcasted data...");
+                        i(TAG, "Waiting for broadcasted data...");
                         byte[] data = new byte[1024];
                         DatagramPacket packet = new DatagramPacket(data, data.length);
                         receiveSocket.receive(packet);
@@ -183,7 +319,7 @@ public class RapidNetworkService extends IntentService {
                     Log.d(TAG, "The socket was closed.");
                 }
 
-                Log.i(TAG, "Stopped receiving data!");
+                i(TAG, "Stopped receiving data!");
             } catch (IOException e) {
                 // We expect this to happen when more than one DFE on the same phone will try to create
                 // this service and the port will be busy. This way only one service will be listening for D2D
@@ -218,9 +354,10 @@ public class RapidNetworkService extends IntentService {
                 otherPhone.setTimestamp(System.currentTimeMillis());
                 otherPhone.setIp(packet.getAddress().getHostAddress());
                 setD2dPhones.add(otherPhone);
-                // FIXME writing the set here is too heavy but I want this just for the demo. Later fix this
-                // with a smarter alternative.
-                writeSetOnFile();
+                // FIXME writing the set here is too heavy but I want this just for the demo.
+                // Later fix this with a smarter alternative.
+//                writeSetOnFile();
+                broadcastD2dDevices();
             }
         } catch (IOException | ClassNotFoundException e) {
             Log.e(TAG, "Error while processing the packet: " + e);
@@ -240,19 +377,34 @@ public class RapidNetworkService extends IntentService {
                     it.remove();
                 }
             }
-            writeSetOnFile();
+//            writeSetOnFile();
+            broadcastD2dDevices();
         }
     }
 
     private void writeSetOnFile() {
         try {
-            Log.i(TAG, "Writing set of D2D devices on the sdcard file");
+            i(TAG, "Writing set of D2D devices on the sdcard file");
             // This method is blocking, waiting for the lock on the file to be available.
             Utils.writeObjectToFile(Constants.FILE_D2D_PHONES, setD2dPhones);
-            Log.i(TAG, "Finished writing set of D2D devices on the sdcard file");
+            i(TAG, "Finished writing set of D2D devices on the sdcard file");
+
         } catch (IOException e) {
             Log.e(TAG, "Error while writing set of D2D devices on the sdcard file: " + e);
         }
+    }
+
+    private void broadcastD2dDevices() {
+        i(TAG, "Broadcasting set of d2d devices, if not empty (size: " +
+                (setD2dPhones != null ? setD2dPhones.size() : "null") + ")");
+        if (setD2dPhones != null && setD2dPhones.size() > 0) {
+            Intent i = new Intent(RAPID_D2D_SET_CHANGED);
+            i.putExtra(RAPID_D2D_SET, setD2dPhones);
+            sendBroadcast(i);
+        }
+        PhoneSpecs my = PhoneSpecs.getPhoneSpecs(getApplicationContext());
+        i(TAG, "My specs: " + my);
+        setD2dPhones.add(my);
     }
 
     private class NetMeasurementRunnable implements Runnable {
@@ -300,16 +452,19 @@ public class RapidNetworkService extends IntentService {
 
                 int command = is.read();
                 switch (command) {
-                    case 1:
+                    case AC_GET_VM:
                         oos.writeObject(sClone);
                         oos.flush();
                         break;
 
-                    case 2:
+                    case AC_GET_NETWORK_MEASUREMENTS:
                         oos.writeInt(NetworkProfiler.lastUlRate.getBw());
                         oos.writeInt(NetworkProfiler.lastDlRate.getBw());
                         oos.writeInt(NetworkProfiler.rtt);
                         oos.flush();
+                        break;
+
+                    case AC_QOS_PARAMS:
                         break;
 
                     default:
@@ -323,7 +478,7 @@ public class RapidNetworkService extends IntentService {
     }
 
     private boolean registerWithDsAndSlam() {
-        Log.i(TAG, "Registering...");
+        i(TAG, "Registering...");
         boolean registeredWithSlam = false;
 
         if (registerWithDs()) {
@@ -348,11 +503,14 @@ public class RapidNetworkService extends IntentService {
 
         Log.d(TAG, "Starting as phone with ID: " + myId);
 
-        Socket dsSocket = new Socket();
+        int maxNrTimesToTry = 3;
+        int nrTimesTried = 0;
+        Socket dsSocket = null;
         boolean connectedWithDs = false;
         do {
-            Log.i(TAG, "Registering with DS " + config.getDSIp() + ":" + config.getDSPort());
+            i(TAG, "Registering with DS " + config.getDSIp() + ":" + config.getDSPort());
             try {
+                dsSocket = new Socket();
                 dsSocket.connect(new InetSocketAddress(config.getDSIp(), config.getDSPort()), 5000);
                 Log.d(TAG, "Connected with DS");
                 connectedWithDs = true;
@@ -364,51 +522,53 @@ public class RapidNetworkService extends IntentService {
                     Thread.currentThread().interrupt();
                 }
             }
-        } while (!connectedWithDs);
+        } while (!connectedWithDs && ++nrTimesTried < maxNrTimesToTry);
 
-        try (ObjectOutputStream dsOut = new ObjectOutputStream(dsSocket.getOutputStream());
-             ObjectInputStream dsIn = new ObjectInputStream(dsSocket.getInputStream())) {
+        if (connectedWithDs) {
+            try (ObjectOutputStream dsOut = new ObjectOutputStream(dsSocket.getOutputStream());
+                 ObjectInputStream dsIn = new ObjectInputStream(dsSocket.getInputStream())) {
 
-            // Send the name and id to the DS
-            if (usePrevVm) {
-                Log.i(TAG, "AC_REGISTER_PREV_DS");
-                // Send message format: command (java byte), userId (java long), qosFlag (java int)
-                dsOut.writeByte(RapidMessages.AC_REGISTER_PREV_DS);
-                dsOut.writeLong(myId); // send my user ID so that my previous VM can be released
-            } else { // Connect to a new VM
-                Log.i(TAG, "AC_REGISTER_NEW_DS");
-                dsOut.writeByte(RapidMessages.AC_REGISTER_NEW_DS);
+                // Send the name and id to the DS
+                if (usePrevVm) {
+                    i(TAG, "AC_REGISTER_PREV_DS");
+                    // Send message format: command (java byte), userId (java long), qosFlag (java int)
+                    dsOut.writeByte(RapidMessages.AC_REGISTER_PREV_DS);
+                    dsOut.writeLong(myId); // send my user ID so that my previous VM can be released
+                } else { // Connect to a new VM
+                    i(TAG, "AC_REGISTER_NEW_DS");
+                    dsOut.writeByte(RapidMessages.AC_REGISTER_NEW_DS);
 
-                dsOut.writeLong(myId); // send my user ID so that my previous VM can be released
-                // FIXME: should not use hard-coded values here.
-                dsOut.writeInt(vmNrVCPUs); // send vcpuNum as int
-                dsOut.writeInt(vmMemSize); // send memSize as int
-                dsOut.writeInt(vmNrGpuCores); // send gpuCores as int
+                    dsOut.writeLong(myId); // send my user ID so that my previous VM can be released
+                    // FIXME: should not use hard-coded values here.
+                    dsOut.writeInt(vmNrVCPUs); // send vcpuNum as int
+                    dsOut.writeInt(vmMemSize); // send memSize as int
+                    dsOut.writeInt(vmNrGpuCores); // send gpuCores as int
+                }
+
+                dsOut.flush();
+
+                // Receive message format: status (java byte), userId (java long), SLAM ipAddress (java UTF)
+                byte status = dsIn.readByte();
+                i(TAG, "Return Status: " + (status == RapidMessages.OK ? "OK" : "ERROR"));
+                if (status == RapidMessages.OK) {
+                    myId = dsIn.readLong();
+                    i(TAG, "userId is: " + myId);
+
+                    // Read the list of VMMs, which will be sorted based on free resources
+                    vmmIPs = (ArrayList<String>) dsIn.readObject();
+
+                    // Read the SLAM IP and port
+                    String slamIp = dsIn.readUTF();
+                    int slamPort = dsIn.readInt();
+                    config.setSlamIp(slamIp);
+                    config.setSlamPort(slamPort);
+                    i(TAG, "SLAM address is: " + slamIp + ":" + slamPort);
+
+                    return true;
+                }
+            } catch (Exception e) {
+                Log.e(TAG, "Error while connecting with the DS: " + e);
             }
-
-            dsOut.flush();
-
-            // Receive message format: status (java byte), userId (java long), SLAM ipAddress (java UTF)
-            byte status = dsIn.readByte();
-            Log.i(TAG, "Return Status: " + (status == RapidMessages.OK ? "OK" : "ERROR"));
-            if (status == RapidMessages.OK) {
-                myId = dsIn.readLong();
-                Log.i(TAG, "userId is: " + myId);
-
-                // Read the list of VMMs, which will be sorted based on free resources
-                vmmIPs = (ArrayList<String>) dsIn.readObject();
-
-                // Read the SLAM IP and port
-                String slamIp = dsIn.readUTF();
-                int slamPort = dsIn.readInt();
-                config.setSlamIp(slamIp);
-                config.setSlamPort(slamPort);
-                Log.i(TAG, "SLAM address is: " + slamIp + ":" + slamPort);
-
-                return true;
-            }
-        } catch (Exception e) {
-            Log.e(TAG, "Error while connecting with the DS: " + e);
         }
 
         return false;
@@ -422,7 +582,7 @@ public class RapidNetworkService extends IntentService {
         Socket slamSocket = new Socket();
         boolean connectedWithSlam = false;
         do {
-            Log.i(TAG, "Registering with SLAM " + config.getSlamIp() + ":" + config.getSlamPort());
+            i(TAG, "Registering with SLAM " + config.getSlamIp() + ":" + config.getSlamPort());
             try {
                 slamSocket.connect(new InetSocketAddress(config.getSlamIp(), config.getSlamPort()), 5000);
                 Log.d(TAG, "Connected with SLAM");
@@ -458,24 +618,24 @@ public class RapidNetworkService extends IntentService {
 
             int slamResponse = ois.readByte();
             if (slamResponse == RapidMessages.OK) {
-                Log.i(TAG, "SLAM OK, getting the VM details");
+                i(TAG, "SLAM OK, getting the VM details");
                 vmIp = ois.readUTF();
 
                 sClone = new Clone("", vmIp);
                 sClone.setId((int) myId);
 
-                Log.i(TAG, "Saving my ID and the vmIp: " + myId + ", " + vmIp);
+                i(TAG, "Saving my ID and the vmIp: " + myId + ", " + vmIp);
                 SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(getApplicationContext());
                 SharedPreferences.Editor editor = prefs.edit();
 
                 editor.putLong(Constants.MY_OLD_ID, myId);
                 editor.putString(Constants.PREV_VM_IP, vmIp);
 
-                Log.i(TAG, "Saving the VMM IP: " + vmmIp);
+                i(TAG, "Saving the VMM IP: " + vmmIp);
                 editor.putString(Constants.PREV_VMM_IP, vmmIp);
                 editor.apply();
 
-                Log.i(TAG, "Broadcasting the details of the VM to all rapid apps");
+                i(TAG, "Broadcasting the details of the VM to all rapid apps");
                 Intent intent = new Intent(RapidNetworkService.RAPID_VM_CHANGED);
                 intent.putExtra(RapidNetworkService.RAPID_VM_IP, sClone);
                 sendBroadcast(intent);
