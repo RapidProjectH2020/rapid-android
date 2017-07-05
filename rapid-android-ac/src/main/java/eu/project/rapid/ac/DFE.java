@@ -1,4 +1,4 @@
-/*******************************************************************************
+/*
  * Copyright (C) 2015, 2016 RAPID EU Project
  *
  * This library is free software; you can redistribute it and/or modify it under the terms of the

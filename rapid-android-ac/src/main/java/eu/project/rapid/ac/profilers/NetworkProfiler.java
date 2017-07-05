@@ -32,6 +32,7 @@ import java.io.DataInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.net.SocketException;
 import java.net.UnknownHostException;
@@ -547,14 +548,26 @@ public class NetworkProfiler {
     }
 
     public static void measureRtt(String serverIp, int serverPort) {
-        try (Socket clientSocket = new Socket(serverIp, serverPort);
-             OutputStream os = clientSocket.getOutputStream();
-             InputStream is = clientSocket.getInputStream();
-             DataInputStream dis = new DataInputStream(is)) {
+        Socket clientSocket = new Socket();
+        try {
+            clientSocket.connect(new InetSocketAddress(serverIp, serverPort), 1000);
 
-            rttPing(is, os);
+            try (OutputStream os = clientSocket.getOutputStream();
+                 InputStream is = clientSocket.getInputStream();
+                 DataInputStream dis = new DataInputStream(is)) {
+
+                rttPing(is, os);
+            } catch (IOException e) {
+                Log.w(TAG, "Could not connect with the VM for measuring the RTT: " + e);
+            }
         } catch (IOException e) {
-            Log.w(TAG, "Could not connect with the VM for measuring the RTT: " + e);
+            Log.d(TAG, "Could not connect to VM for RTT measuring: " + e);
+        } finally {
+            try {
+                clientSocket.close();
+            } catch (IOException e) {
+                Log.d(TAG, "Could not close socket with VMM on RTT measuring: " + e);
+            }
         }
     }
 
@@ -568,7 +581,8 @@ public class NetworkProfiler {
         long rxBytes = 0;
 
         try {
-            final Socket clientSocket = new Socket(serverIp, serverPort);
+            final Socket clientSocket = new Socket();
+            clientSocket.connect(new InetSocketAddress(serverIp, serverPort), 1000);
             os = clientSocket.getOutputStream();
             is = clientSocket.getInputStream();
             dis = new DataInputStream(is);
@@ -599,7 +613,6 @@ public class NetworkProfiler {
                 rxBytes += is.read(buffer);
                 os.write(1);
             }
-
         } catch (UnknownHostException e) {
             Log.w(TAG, "UnknownHostException while measuring download rate: " + e);
         } catch (SocketException e) {
@@ -635,7 +648,8 @@ public class NetworkProfiler {
 
         Socket clientSocket = null;
         try {
-            clientSocket = new Socket(serverIp, serverPort);
+            clientSocket = new Socket();
+            clientSocket.connect(new InetSocketAddress(serverIp, serverPort), 1000);
             os = clientSocket.getOutputStream();
             is = clientSocket.getInputStream();
             dis = new DataInputStream(is);
@@ -662,7 +676,8 @@ public class NetworkProfiler {
 
             try {
                 Log.w(TAG, "Asking the VM to tell us how many data it actually received in 3s");
-                clientSocket = new Socket(config.getClone().getIp(), config.getClonePortBandwidthTest());
+                clientSocket = new Socket();
+                clientSocket.connect(new InetSocketAddress(config.getClone().getIp(), config.getClonePortBandwidthTest()), 1000);
                 os = clientSocket.getOutputStream();
                 is = clientSocket.getInputStream();
                 dis = new DataInputStream(is);
