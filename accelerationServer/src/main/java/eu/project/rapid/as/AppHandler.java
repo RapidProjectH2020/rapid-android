@@ -44,6 +44,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
@@ -85,8 +86,8 @@ public class AppHandler implements Runnable {
     private Boolean[] pausedHelper; // Needed for synchronization with the clone helpers
     private int requestFromMainServer = 0; // The main clone sends commands to the clone helpers
     private Object responsesFromServers; // Array of partial results returned by the clone helpers
-    private final AtomicInteger nrClonesReady = new AtomicInteger(0); // The main thread waits for all the
-    // clone helpers to finish execution
+    // The main thread waits for all the clone helpers to finish execution
+    private final AtomicInteger nrClonesReady = new AtomicInteger(0);
 
     private static Map<String, Integer> apkMap = new ConcurrentHashMap<>(); // appName, apkSize
     private static Map<String, CountDownLatch> apkMapSemaphore = new ConcurrentHashMap<>(); // appName, latch
@@ -98,6 +99,10 @@ public class AppHandler implements Runnable {
     private Object[] pValues; // the values of the parameters to be passed to the method
     private Class<?> returnType; // the return type of the method
     private String apkFilePath; // the path where the apk is installed
+    // I need this variable for when the DS starts the VM migration.
+    // The AS will let the DS shut down the VM only if this is equal to 0.
+    private static AtomicInteger nrTasksCurrentlyBeingExecuted = new AtomicInteger(0);
+    private static AtomicBoolean migrationInProgress = new AtomicBoolean(false);
 
     /**
      * Key is the appName.
@@ -142,6 +147,14 @@ public class AppHandler implements Runnable {
                 switch (request) {
                     case RapidMessages.AC_OFFLOAD_REQ_AS:
 
+                        if (migrationInProgress.get()) {
+                            // Simply closing the connection will force the client to run tasks locally
+                            closeConnection();
+                            break;
+                        }
+
+                        nrTasksCurrentlyBeingExecuted.incrementAndGet();
+
                         // Start profiling on remote side
                         DeviceProfiler devProfiler = new DeviceProfiler(mContext);
                         devProfiler.startDeviceProfiling();
@@ -170,6 +183,9 @@ public class AppHandler implements Runnable {
                             Log.d(TAG, "Connection failed");
                             e.printStackTrace();
                             return;
+                        } finally {
+                            nrTasksCurrentlyBeingExecuted.decrementAndGet();
+                            nrTasksCurrentlyBeingExecuted.notifyAll();
                         }
 
                         break;
@@ -201,7 +217,9 @@ public class AppHandler implements Runnable {
                             // D/dalvikvm( 3885): ODEX file is stale or bad; removing and retrying
                             String oldDexFilePath =
                                     mContext.getFilesDir().getAbsolutePath() + "/" + appName + ".dex";
-                            new File(oldDexFilePath).delete();
+                            if (!new File(oldDexFilePath).delete()) {
+                                Log.v(TAG, "Could not delete the old Dex file: " + oldDexFilePath);
+                            }
                             apkMapSemaphore.get(appName).countDown();
                         }
 
@@ -219,6 +237,23 @@ public class AppHandler implements Runnable {
                     case RapidMessages.CLONE_ID_SEND:
                         cloneHelperId = mIs.read();
                         Utils.writeCloneHelperId(cloneHelperId);
+                        break;
+
+                    case RapidMessages.DS_MIGRATION_VM_AS:
+                        // When the QoS are not respected, the VM will be upgraded.
+                        // In that case, the DS informs the AS, so that the AS can inform the AC.
+                        Log.w(TAG, "The DS is informing that there will be a VM migration/update!");
+                        migrationInProgress.getAndSet(true);
+
+                        while (nrTasksCurrentlyBeingExecuted.get() > 0) {
+                            try {
+                                nrTasksCurrentlyBeingExecuted.wait();
+                            } catch (Exception e) {
+                                Log.v(TAG, "Exception while waiting for no more tasks in execution");
+                            }
+                        }
+                        mObjOs.writeByte(RapidMessages.OK);
+                        mObjOs.flush();
                         break;
                 }
             }
@@ -240,23 +275,33 @@ public class AppHandler implements Runnable {
             Log.e(TAG, "Error not caught properly - " + e);
             e.printStackTrace();
         } finally {
-            RapidUtils.closeQuietly(mObjOs);
-            RapidUtils.closeQuietly(mObjIs);
-            RapidUtils.closeQuietly(mClient);
+            closeConnection();
+            deleteLibFiles();
+        }
+    }
 
-//            // Delete the library files
-            for (File f : libraries) {
-                File fParent = f.getParentFile();
-                if (fParent.isDirectory()) {
-                    for (File f2 : fParent.listFiles()) {
-                        if (!f2.delete()) {
-                            Log.v(TAG, "Not possible to delete library file: " + f2);
-                        }
+    private void closeConnection() {
+        RapidUtils.closeQuietly(mObjOs);
+        RapidUtils.closeQuietly(mObjIs);
+        RapidUtils.closeQuietly(mClient);
+    }
+
+    /**
+     * Delete the library files
+     */
+    private void deleteLibFiles() {
+
+        for (File f : libraries) {
+            File fParent = f.getParentFile();
+            if (fParent.isDirectory()) {
+                for (File f2 : fParent.listFiles()) {
+                    if (!f2.delete()) {
+                        Log.v(TAG, "Not possible to delete library file: " + f2);
                     }
                 }
-                // Do not delete the parent, needed for the library index.
-//                fParent.delete();
             }
+            // Do not delete the parent, needed for the library index.
+//                fParent.delete();
         }
     }
 
@@ -323,7 +368,6 @@ public class AppHandler implements Runnable {
      * library-1/library.so, library-2/library.so, and so on.
      *
      * @param dexFile the apk file
-     * @return the list of shared libraries
      */
 
     @SuppressWarnings("unchecked")

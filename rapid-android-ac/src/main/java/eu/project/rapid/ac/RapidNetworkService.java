@@ -40,6 +40,7 @@ import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.TreeSet;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
@@ -70,15 +71,15 @@ public class RapidNetworkService extends IntentService {
 
     private static final String TAG = RapidNetworkService.class.getName();
 
+    // Also used by the DFE, that's why not private
     static final int AC_RM_PORT = 23456;
-
     static final int AC_GET_VM = 1;
     static final int AC_GET_NETWORK_MEASUREMENTS = 2;
     static final int AC_QOS_PARAMS = 3;
 
-    ScheduledThreadPoolExecutor setWriterScheduledPool =
+    ScheduledThreadPoolExecutor setBroadcasterScheduledPool =
             (ScheduledThreadPoolExecutor) Executors.newScheduledThreadPool(1);
-    static final int FREQUENCY_WRITE_D2D_SET = 1 * 60 * 1013; // Every 5 minutes broadcast the set
+    private static final int FREQUENCY_BROADCAST_D2D_SET = 5 * 60 * 1013; // Every 5 minutes broadcast the set
     private TreeSet<PhoneSpecs> setD2dPhones = new TreeSet<>(); // Sorted by specs
     public static final String RAPID_D2D_SET_CHANGED = "eu.project.rapid.d2dSetUpdate"; // Broadcast intent
     public static final String RAPID_D2D_SET = "eu.project.rapid.d2dSet"; // Intent extra
@@ -86,7 +87,14 @@ public class RapidNetworkService extends IntentService {
     ScheduledThreadPoolExecutor netScheduledPool =
             (ScheduledThreadPoolExecutor) Executors.newScheduledThreadPool(2);
     // Every 30 minutes measure rtt, ulRate, and dlRate
-    static final int FREQUENCY_NET_MEASUREMENT = 30 * 60 * 1000;
+    private static final int FREQUENCY_NET_MEASUREMENT = 30 * 60 * 1000;
+
+    ScheduledThreadPoolExecutor registrationScheduledPool =
+            (ScheduledThreadPoolExecutor) Executors.newScheduledThreadPool(1);
+    // Every 2 minutes check if we have a VM. If not, try to re-register with the DS and SLAM.
+    private static final int FREQUENCY_REGISTRATION = 2 * 60 * 1000;
+    private static boolean registeringWithDs = false;
+    private static boolean registeringWithSlam = false;
 
     private Configuration config;
     private boolean usePrevVm = true;
@@ -105,6 +113,9 @@ public class RapidNetworkService extends IntentService {
     public static final String RAPID_NETWORK_RTT = "eu.project.rapid.rtt";
     public static final String RAPID_NETWORK_UL_RATE = "eu.project.rapid.ulRate";
     public static final String RAPID_NETWORK_DL_RATE = "eu.project.rapid.dlRate";
+    private String jsonQosParams;
+
+    private ExecutorService clientsThreadPool = Executors.newCachedThreadPool();
 
     public RapidNetworkService() {
         super(RapidNetworkService.class.getName());
@@ -118,8 +129,8 @@ public class RapidNetworkService extends IntentService {
             Log.d(TAG, "************* Started the AC_RM listening server ****************");
             readConfigurationFile();
             String qosParams = readQosParams().replace(" ", "").replace("\n", "");
-            String jsonQosParams = parseQosParams(qosParams);
-            Log.v(TAG, "QoS params: " + qosParams);
+//            Log.v(TAG, "QoS params: " + qosParams);
+            jsonQosParams = parseQosParams(qosParams);
             Log.v(TAG, "QoS params in JSON: " + jsonQosParams);
 
             // The prev id is useful to the DS so that it can release already allocated VMs.
@@ -130,17 +141,33 @@ public class RapidNetworkService extends IntentService {
 
             new Thread(new D2DListener()).start();
 
-            setWriterScheduledPool.scheduleWithFixedDelay(new D2DSetWriter(), FREQUENCY_WRITE_D2D_SET,
-                    FREQUENCY_WRITE_D2D_SET, TimeUnit.MILLISECONDS);
+            setBroadcasterScheduledPool.scheduleWithFixedDelay(new D2DSetBroadcaster(),
+                    FREQUENCY_BROADCAST_D2D_SET, FREQUENCY_BROADCAST_D2D_SET, TimeUnit.MILLISECONDS);
 
             netScheduledPool.scheduleWithFixedDelay(new NetMeasurementRunnable(), 10,
                     FREQUENCY_NET_MEASUREMENT, TimeUnit.MILLISECONDS);
 
+            registrationScheduledPool.scheduleWithFixedDelay(
+                    new Runnable() {
+                        @Override
+                        public void run() {
+                            if (sClone == null) {
+                                Log.v(TAG, "We do not have a VM, registering with the DS and SLAM...");
+                                if (registeringWithDs || registeringWithSlam) {
+                                    Log.v(TAG, "Registration already in progress...");
+                                } else {
+                                    registerWithDsAndSlam();
+                                }
+                            }
+                        }
+                    }, FREQUENCY_REGISTRATION, FREQUENCY_REGISTRATION, TimeUnit.MILLISECONDS
+            );
 
             registerWithDsAndSlam();
             while (true) {
-                try (Socket client = acRmServerSocket.accept()) {
-                    new Thread(new ClientHandler(client)).start();
+                try {
+                    Socket client = acRmServerSocket.accept();
+                    clientsThreadPool.execute(new ClientHandler(client));
                 } catch (IOException e) {
                     e.printStackTrace();
                 }
@@ -148,6 +175,21 @@ public class RapidNetworkService extends IntentService {
         } catch (IOException e) {
             Log.w(TAG, "Couldn't start the listening server, " +
                     "maybe another app has already started this service: " + e);
+        } finally {
+            if (clientsThreadPool != null) {
+                clientsThreadPool.shutdown();
+                Log.v(TAG, "The clientThreadPool is now shut down.");
+            }
+
+            if (netScheduledPool != null) {
+                netScheduledPool.shutdown();
+                Log.v(TAG, "The netScheduledPool is now shut down.");
+            }
+
+            if (registrationScheduledPool != null) {
+                registrationScheduledPool.shutdown();
+                Log.v(TAG, "The registrationScheduledPool is now shut down.");
+            }
         }
     }
 
@@ -285,7 +327,6 @@ public class RapidNetworkService extends IntentService {
 
             try {
                 i(TAG, "Thread started");
-//                writeSetOnFile();
                 broadcastD2dDevices();
 
                 WifiManager.MulticastLock lock;
@@ -297,7 +338,7 @@ public class RapidNetworkService extends IntentService {
                         lock = wifi.createMulticastLock("WiFi_Lock");
                         lock.setReferenceCounted(true);
                         lock.acquire();
-                        i(TAG, "Lock acquired!");
+                        i(TAG, "WiFi lock acquired (for multicast)!");
                     }
                 }
 
@@ -340,7 +381,7 @@ public class RapidNetworkService extends IntentService {
      * device is added to the map and more than 5 minutes have passed since the last time we saved the
      * devices on the file, then save the set in the filesystem so that other DFEs can read it.
      *
-     * @param packet
+     * @param packet The packet received by another device in a D2D scenario
      */
     private void processPacket(DatagramPacket packet) {
         try {
@@ -356,7 +397,6 @@ public class RapidNetworkService extends IntentService {
                 setD2dPhones.add(otherPhone);
                 // FIXME writing the set here is too heavy but I want this just for the demo.
                 // Later fix this with a smarter alternative.
-//                writeSetOnFile();
                 broadcastD2dDevices();
             }
         } catch (IOException | ClassNotFoundException e) {
@@ -364,12 +404,12 @@ public class RapidNetworkService extends IntentService {
         }
     }
 
-    private class D2DSetWriter implements Runnable {
+    private class D2DSetBroadcaster implements Runnable {
         @Override
         public void run() {
-            // Write the set in the filesystem so that other DFEs can use the D2D phones when needed.
+            // Broadcast the set to other DFEs.
+            // First clean the set from devices that have not been pinging recently.
             Iterator<PhoneSpecs> it = setD2dPhones.iterator();
-            // First clean the set from devices that have not been pinging recently
             while (it.hasNext()) {
                 // If the last time we have seen this device is 5 pings before, then remove it.
                 if ((System.currentTimeMillis() - it.next().getTimestamp()) > 5
@@ -377,20 +417,7 @@ public class RapidNetworkService extends IntentService {
                     it.remove();
                 }
             }
-//            writeSetOnFile();
             broadcastD2dDevices();
-        }
-    }
-
-    private void writeSetOnFile() {
-        try {
-            i(TAG, "Writing set of D2D devices on the sdcard file");
-            // This method is blocking, waiting for the lock on the file to be available.
-            Utils.writeObjectToFile(Constants.FILE_D2D_PHONES, setD2dPhones);
-            i(TAG, "Finished writing set of D2D devices on the sdcard file");
-
-        } catch (IOException e) {
-            Log.e(TAG, "Error while writing set of D2D devices on the sdcard file: " + e);
         }
     }
 
@@ -402,9 +429,6 @@ public class RapidNetworkService extends IntentService {
             i.putExtra(RAPID_D2D_SET, setD2dPhones);
             sendBroadcast(i);
         }
-        PhoneSpecs my = PhoneSpecs.getPhoneSpecs(getApplicationContext());
-        i(TAG, "My specs: " + my);
-        setD2dPhones.add(my);
     }
 
     private class NetMeasurementRunnable implements Runnable {
@@ -508,10 +532,11 @@ public class RapidNetworkService extends IntentService {
         Socket dsSocket = null;
         boolean connectedWithDs = false;
         do {
+            registeringWithDs = true;
             i(TAG, "Registering with DS " + config.getDSIp() + ":" + config.getDSPort());
             try {
                 dsSocket = new Socket();
-                dsSocket.connect(new InetSocketAddress(config.getDSIp(), config.getDSPort()), 5000);
+                dsSocket.connect(new InetSocketAddress(config.getDSIp(), config.getDSPort()), 3000);
                 Log.d(TAG, "Connected with DS");
                 connectedWithDs = true;
             } catch (Exception e) {
@@ -529,12 +554,12 @@ public class RapidNetworkService extends IntentService {
                  ObjectInputStream dsIn = new ObjectInputStream(dsSocket.getInputStream())) {
 
                 // Send the name and id to the DS
-                if (usePrevVm) {
+                if (usePrevVm && myId != -1) {
                     i(TAG, "AC_REGISTER_PREV_DS");
                     // Send message format: command (java byte), userId (java long), qosFlag (java int)
                     dsOut.writeByte(RapidMessages.AC_REGISTER_PREV_DS);
                     dsOut.writeLong(myId); // send my user ID so that my previous VM can be released
-                } else { // Connect to a new VM
+                } else {
                     i(TAG, "AC_REGISTER_NEW_DS");
                     dsOut.writeByte(RapidMessages.AC_REGISTER_NEW_DS);
 
@@ -546,8 +571,6 @@ public class RapidNetworkService extends IntentService {
                 }
 
                 dsOut.flush();
-
-                // Receive message format: status (java byte), userId (java long), SLAM ipAddress (java UTF)
                 byte status = dsIn.readByte();
                 i(TAG, "Return Status: " + (status == RapidMessages.OK ? "OK" : "ERROR"));
                 if (status == RapidMessages.OK) {
@@ -568,9 +591,11 @@ public class RapidNetworkService extends IntentService {
                 }
             } catch (Exception e) {
                 Log.e(TAG, "Error while connecting with the DS: " + e);
+                e.printStackTrace();
             }
         }
 
+        registeringWithDs = false;
         return false;
     }
 
@@ -579,11 +604,16 @@ public class RapidNetworkService extends IntentService {
      */
     private boolean registerWithSlam(String vmmIp) {
 
-        Socket slamSocket = new Socket();
+        int maxNrTimesToTry = 3;
+        int nrTimesTried = 0;
+        Socket slamSocket = null;
         boolean connectedWithSlam = false;
+
         do {
             i(TAG, "Registering with SLAM " + config.getSlamIp() + ":" + config.getSlamPort());
+            registeringWithSlam = true;
             try {
+                slamSocket = new Socket();
                 slamSocket.connect(new InetSocketAddress(config.getSlamIp(), config.getSlamPort()), 5000);
                 Log.d(TAG, "Connected with SLAM");
                 connectedWithSlam = true;
@@ -595,62 +625,68 @@ public class RapidNetworkService extends IntentService {
                     Thread.currentThread().interrupt();
                 }
             }
-        } while (!connectedWithSlam);
+        } while (!connectedWithSlam && ++nrTimesTried < maxNrTimesToTry);
 
-        try (ObjectOutputStream oos = new ObjectOutputStream(slamSocket.getOutputStream());
-             ObjectInputStream ois = new ObjectInputStream(slamSocket.getInputStream())) {
+        if (connectedWithSlam) {
+            try (ObjectOutputStream oos = new ObjectOutputStream(slamSocket.getOutputStream());
+                 ObjectInputStream ois = new ObjectInputStream(slamSocket.getInputStream())) {
 
-            // Send the ID to the SLAM
-            oos.writeByte(RapidMessages.AC_REGISTER_SLAM);
-            oos.writeLong(myId);
-            oos.writeInt(RapidConstants.OS.ANDROID.ordinal());
+                // Send the ID to the SLAM
+                oos.writeByte(RapidMessages.AC_REGISTER_SLAM);
+                oos.writeLong(myId);
+                oos.writeInt(RapidConstants.OS.ANDROID.ordinal());
 
-            // Send the vmmId and vmmPort to the SLAM so it can start the VM
-            oos.writeUTF(vmmIp);
-            oos.writeInt(config.getVmmPort());
+                // Send the vmmId and vmmPort to the SLAM so it can start the VM
+                oos.writeUTF(vmmIp);
+                oos.writeInt(config.getVmmPort());
 
-            // FIXME: should not use hard-coded values here.
-            oos.writeInt(vmNrVCPUs); // send vcpuNum as int
-            oos.writeInt(vmMemSize); // send memSize as int
-            oos.writeInt(vmNrGpuCores); // send gpuCores as int
+                // FIXME: should not use hard-coded values here.
+                oos.writeInt(vmNrVCPUs); // send vcpuNum as int
+                oos.writeInt(vmMemSize); // send memSize as int
+                oos.writeInt(vmNrGpuCores); // send gpuCores as int
+                oos.writeUTF(jsonQosParams);
 
-            oos.flush();
+                oos.flush();
 
-            int slamResponse = ois.readByte();
-            if (slamResponse == RapidMessages.OK) {
-                i(TAG, "SLAM OK, getting the VM details");
-                vmIp = ois.readUTF();
+                Log.i(TAG, "Waiting for SLAM to reply...");
+                int slamResponse = ois.readByte();
+                if (slamResponse == RapidMessages.OK) {
+                    i(TAG, "SLAM OK, getting the VM details");
+                    vmIp = ois.readUTF();
 
-                sClone = new Clone("", vmIp);
-                sClone.setId((int) myId);
+                    sClone = new Clone("", vmIp);
+                    sClone.setId((int) myId);
 
-                i(TAG, "Saving my ID and the vmIp: " + myId + ", " + vmIp);
-                SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(getApplicationContext());
-                SharedPreferences.Editor editor = prefs.edit();
+                    i(TAG, "Saving my ID and the vmIp: " + myId + ", " + vmIp);
+                    SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(getApplicationContext());
+                    SharedPreferences.Editor editor = prefs.edit();
 
-                editor.putLong(Constants.MY_OLD_ID, myId);
-                editor.putString(Constants.PREV_VM_IP, vmIp);
+                    editor.putLong(Constants.MY_OLD_ID, myId);
+                    editor.putString(Constants.PREV_VM_IP, vmIp);
 
-                i(TAG, "Saving the VMM IP: " + vmmIp);
-                editor.putString(Constants.PREV_VMM_IP, vmmIp);
-                editor.apply();
+                    i(TAG, "Saving the VMM IP: " + vmmIp);
+                    editor.putString(Constants.PREV_VMM_IP, vmmIp);
+                    editor.apply();
 
-                i(TAG, "Broadcasting the details of the VM to all rapid apps");
-                Intent intent = new Intent(RapidNetworkService.RAPID_VM_CHANGED);
-                intent.putExtra(RapidNetworkService.RAPID_VM_IP, sClone);
-                sendBroadcast(intent);
+                    i(TAG, "Broadcasting the details of the VM to all rapid apps");
+                    Intent intent = new Intent(RapidNetworkService.RAPID_VM_CHANGED);
+                    intent.putExtra(RapidNetworkService.RAPID_VM_IP, sClone);
+                    sendBroadcast(intent);
 
-                return true;
-            } else if (slamResponse == RapidMessages.ERROR) {
-                Log.e(TAG, "SLAM registration replied with ERROR, VM will be null");
-            } else {
-                Log.e(TAG, "SLAM registration replied with uknown message " + slamResponse
-                        + ", VM will be null");
+                    return true;
+
+                } else if (slamResponse == RapidMessages.ERROR) {
+                    Log.e(TAG, "SLAM registration replied with ERROR, VM will be null");
+                } else {
+                    Log.e(TAG, "SLAM registration replied with uknown message " + slamResponse
+                            + ", VM will be null");
+                }
+            } catch (IOException e) {
+                Log.e(TAG, "IOException while talking to the SLAM: " + e);
             }
-        } catch (IOException e) {
-            Log.e(TAG, "IOException while talking to the SLAM: " + e);
         }
 
+        registeringWithSlam = false;
         return false;
     }
 }

@@ -48,9 +48,8 @@ public class Constants {
     public static final String TEST_LOGS_FOLDER =
             RAPID_FOLDER + File.separator + "test_logs" + File.separator;
     public static final String LOG_FILE_NAME = RAPID_FOLDER + File.separator + "rapid-log-";
-    public static final String SSL_KEYSTORE = RAPID_FOLDER + File.separator + "keystore.bks";
-    public static final String SSL_CA_TRUSTSTORE =
-            RAPID_FOLDER + File.separator + "ca_truststore.bks";
+    public static final String SSL_KEYSTORE = "keystore.bks";
+    public static final String SSL_CA_TRUSTSTORE = "ca_truststore.bks";
     public static final String SSL_CERT_ALIAS = "cert";
     public static final String SSL_DEFAULT_PASSW = "changeme";
     public static final String QOS_FILENAME = "rapid-qos.xml";

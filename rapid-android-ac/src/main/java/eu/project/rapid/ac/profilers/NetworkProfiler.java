@@ -117,7 +117,7 @@ public class NetworkProfiler {
         telephonyManager = (TelephonyManager) context.getSystemService(Context.TELEPHONY_SERVICE);
         connectivityManager =
                 (ConnectivityManager) context.getSystemService(Context.CONNECTIVITY_SERVICE);
-        wifiManager = (WifiManager) context.getSystemService(Context.WIFI_SERVICE);
+        wifiManager = (WifiManager) context.getApplicationContext().getSystemService(Context.WIFI_SERVICE);
         if (wifiManager == null) {
             throw new NullPointerException("WiFi manager is null");
         }
@@ -182,7 +182,7 @@ public class NetworkProfiler {
      * @param out
      * @return
      */
-    public static int rttPing(InputStream in, OutputStream out) {
+    private static int rttPing(InputStream in, OutputStream out) {
         Log.d(TAG, "Pinging");
         int tRtt = 0;
         int response;
@@ -292,7 +292,6 @@ public class NetworkProfiler {
     public void registerNetworkStateTrackers() {
         networkStateReceiver = new BroadcastReceiver() {
             public void onReceive(Context context, Intent intent) {
-                // context.unregisterReceiver(this);
 
                 netInfo = connectivityManager.getActiveNetworkInfo();
                 if (netInfo == null) {
@@ -334,6 +333,10 @@ public class NetworkProfiler {
 
         Log.d(TAG, "Register Telephony Data Connection State Tracker");
         telephonyManager.listen(listener, PhoneStateListener.LISTEN_DATA_CONNECTION_STATE);
+    }
+
+    public static boolean isNetConnectionAvailable() {
+        return !currentNetworkTypeName.equals("");
     }
 
     /**
@@ -499,7 +502,8 @@ public class NetworkProfiler {
 
     public int getLinkSpeed() {
         if (wifiManager == null) {
-            wifiManager = (WifiManager) context.getSystemService(Context.WIFI_SERVICE);
+            wifiManager = (WifiManager)
+                    context.getApplicationContext().getSystemService(Context.WIFI_SERVICE);
         }
         WifiInfo wifiInfo = wifiManager.getConnectionInfo();
         return wifiInfo.getLinkSpeed();

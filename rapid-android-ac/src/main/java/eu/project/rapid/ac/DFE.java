@@ -58,6 +58,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.LinkedBlockingDeque;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import javax.net.ssl.HandshakeCompletedEvent;
@@ -276,16 +277,18 @@ public class DFE {
 
             // Read the CA certificate
             KeyStore trustStore = KeyStore.getInstance("BKS");
-//            trustStore.load(new FileInputStream(Constants.SSL_CA_TRUSTSTORE), Constants.SSL_DEFAULT_PASSW.toCharArray());
-            trustStore.load(mContext.getAssets().open("ca_truststore.bks"), Constants.SSL_DEFAULT_PASSW.toCharArray());
-            TrustManagerFactory trustManagerFactory = TrustManagerFactory.getInstance(KeyManagerFactory.getDefaultAlgorithm());
+            trustStore.load(mContext.getAssets().open(Constants.SSL_CA_TRUSTSTORE),
+                    Constants.SSL_DEFAULT_PASSW.toCharArray());
+            TrustManagerFactory trustManagerFactory =
+                    TrustManagerFactory.getInstance(KeyManagerFactory.getDefaultAlgorithm());
             trustManagerFactory.init(trustStore);
 
             // Read my certificate
             KeyStore keyStore = KeyStore.getInstance("BKS");
-            keyStore.load(mContext.getAssets().open("keystore.bks"), Constants.SSL_DEFAULT_PASSW.toCharArray());
-//            keyStore.load(new FileInputStream(Constants.SSL_KEYSTORE), Constants.SSL_DEFAULT_PASSW.toCharArray());
-            KeyManagerFactory kmf = KeyManagerFactory.getInstance(KeyManagerFactory.getDefaultAlgorithm());
+            keyStore.load(mContext.getAssets().open(Constants.SSL_KEYSTORE),
+                    Constants.SSL_DEFAULT_PASSW.toCharArray());
+            KeyManagerFactory kmf =
+                    KeyManagerFactory.getInstance(KeyManagerFactory.getDefaultAlgorithm());
             kmf.init(keyStore, Constants.SSL_DEFAULT_PASSW.toCharArray());
 
             PrivateKey myPrivateKey = (PrivateKey) keyStore.getKey(Constants.SSL_CERT_ALIAS,
@@ -322,7 +325,10 @@ public class DFE {
             if (clone[0] == null) {
 
                 publishProgress("Getting info from the AC_RM...");
-                int maxNrTimes = 3;
+                // Just try to connect once with the ac_rm. If the connection fails,
+                // meaning that the ac_rm is not ready yet,
+                // the ac_rm will notify us by broadcast intents when something happens.
+                int maxNrTimes = 1;
                 int count = 0;
                 boolean connectedWithAcRm = false;
                 Socket acRmSocket = null;
@@ -333,24 +339,18 @@ public class DFE {
                     try {
                         acRmSocket = new Socket();
                         acRmSocket.connect(new InetSocketAddress(InetAddress.getLocalHost(),
-                                RapidNetworkService.AC_RM_PORT), 2000);
+                                RapidNetworkService.AC_RM_PORT), 1000);
                         connectedWithAcRm = true;
                         Log.i(TAG, "Connected with AC_RM!");
                     } catch (IOException e) {
                         Log.e(TAG, "Could not connect with AC_RM: " + e);
-                        try {
-                            Thread.sleep(1000);
-                        } catch (InterruptedException e1) {
-                            Thread.currentThread().interrupt();
-                        }
                     } finally {
                         count++;
                     }
-
                 } while (!connectedWithAcRm && count < maxNrTimes);
 
                 if (connectedWithAcRm) {
-                    Log.i(TAG, "Connection with AC_RM was successful, trying to get the needed info...");
+                    Log.i(TAG, "Connection with AC_RM was successful, getting the needed info...");
                     try (OutputStream os = acRmSocket.getOutputStream();
                          InputStream is = acRmSocket.getInputStream();
                          ObjectOutputStream oos = new ObjectOutputStream(os);
@@ -503,6 +503,11 @@ public class DFE {
         private ObjectInputStream ois;
         private ObjectOutputStream oos;
 
+        ScheduledThreadPoolExecutor vmConnectionScheduledPool =
+                (ScheduledThreadPoolExecutor) Executors.newScheduledThreadPool(1);
+        // Every two minutes check if we need to reconnect to the VM
+        static final int FREQUENCY_VM_CONNECTION = 2 * 60 * 1000;
+
         TaskRunner(int id) {
             TAG = "DFE-TaskRunner-" + id;
         }
@@ -511,6 +516,15 @@ public class DFE {
         public void run() {
 
             registerWithVm();
+            // Schedule some periodic reconnections with the VM, just in case we lost the connection.
+            vmConnectionScheduledPool.scheduleWithFixedDelay(
+                    new Runnable() {
+                        @Override
+                        public void run() {
+                            registerWithVm();
+                        }
+                    }, FREQUENCY_VM_CONNECTION, FREQUENCY_VM_CONNECTION, TimeUnit.MILLISECONDS
+            );
 
             // If the connection was successful then try to send the app to the clone
             if (onLineClear || onLineSSL) {
@@ -557,13 +571,29 @@ public class DFE {
 
         private void registerWithVm() {
             Log.d(TAG, "Registering with the VM...");
+
+            if (onLineClear || onLineSSL) {
+                Log.v(TAG, "We are already connected to the VM, no need for reconnection.");
+                return;
+            }
+
+            if (sClone == null) {
+                Log.v(TAG, "The VM is null, aborting VM registration.");
+                return;
+            }
+
+            // In case of reconnecting with the VM, always try to do that using SSL, if possible.
+            if (config.isCryptoInitialized()) {
+                commType = COMM_TYPE.SSL;
+            }
+
             if (commType == COMM_TYPE.CLEAR) {
-                establishConnection();
+                establishClearConnection();
             } else { // (commType == COMM_TYPE.SSL)
                 if (!establishSslConnection()) {
                     Log.w(TAG, "Setting commType to CLEAR");
                     commType = COMM_TYPE.CLEAR;
-                    establishConnection();
+                    establishClearConnection();
                 }
             }
         }
@@ -571,7 +601,7 @@ public class DFE {
         /**
          * Set up streams for the socket connection, perform initial communication with the clone.
          */
-        private boolean establishConnection() {
+        private boolean establishClearConnection() {
             try {
                 long sTime = System.nanoTime();
                 long startTxBytes = NetworkProfiler.getProcessTxBytes();
@@ -609,8 +639,7 @@ public class DFE {
         private boolean establishSslConnection() {
 
             if (!config.isCryptoInitialized()) {
-                Log.e(TAG,
-                        "The initialization of the cryptographic keys is not done correctly. Cannot perform ssl connection!");
+                Log.e(TAG, "Crypto keys not loaded, cannot perform SSL connection!");
                 return false;
             }
 

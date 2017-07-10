@@ -21,10 +21,10 @@ import android.content.Intent;
 import android.os.Build;
 import android.os.Handler;
 import android.os.IBinder;
+import android.os.Looper;
 import android.util.Log;
 
 import java.io.File;
-import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
@@ -134,14 +134,14 @@ public class AccelerationServer extends Service {
             config.parseConfigFile();
         } catch (FileNotFoundException e1) {
             Log.e(TAG, "Configuration file not found on the clone: " + Constants.CLONE_CONFIG_FILE);
-            Log.e(TAG, "Continuinig with default values.");
+            Log.e(TAG, "Continuing with default values.");
             config = new Configuration();
         }
 
         try {
             Log.i(TAG, "KeyStore default type: " + KeyStore.getDefaultType());
             KeyStore keyStore = KeyStore.getInstance("BKS");
-            keyStore.load(new FileInputStream(Constants.SSL_KEYSTORE),
+            keyStore.load(context.getAssets().open(Constants.SSL_KEYSTORE),
                     Constants.SSL_DEFAULT_PASSW.toCharArray());
             KeyManagerFactory kmf =
                     KeyManagerFactory.getInstance(KeyManagerFactory.getDefaultAlgorithm());
@@ -518,6 +518,7 @@ public class AccelerationServer extends Service {
      * automatically here but the user should have to press a button to start it.
      */
     private void startD2DThread() {
+        Looper.prepare();
         if (mBroadcastHandler == null) {
             mBroadcastHandler = new Handler();
         }
@@ -525,6 +526,7 @@ public class AccelerationServer extends Service {
             mBroadcastRunnable = new D2DBroadcastThread();
         }
         mBroadcastHandler.postDelayed(mBroadcastRunnable, Constants.D2D_BROADCAST_INTERVAL);
+        Looper.loop();
     }
 
     private class D2DBroadcastThread implements Runnable {
