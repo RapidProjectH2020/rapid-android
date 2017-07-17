@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <class-diagram version="1.1.9" icons="true" automaticImage="PNG" always-add-relationships="false" generalizations="true" 
   realizations="true" associations="true" dependencies="false" nesting-relationships="true" router="FAN">  
-  <class id="1" language="java" name="eu.project.rapid.as.AccelerationServer.RegistrationManager" 
+  <class id="1" language="java" name="eu.project.rapid.as.installer.AccelerationServer.AsInstallHandler"
     project="AccelerationServer" file="/AccelerationServer/src/eu/project/rapid/as/AccelerationServer.java" 
     binary="false" corner="BOTTOM_RIGHT">    
     <position height="-1" width="-1" x="742" y="75"/>    
@@ -11,7 +11,7 @@
       <operations public="true" package="true" protected="true" private="true" static="true"/>    
     </display>  
   </class>  
-  <class id="2" language="java" name="eu.project.rapid.as.AccelerationServer.ClientListenerClear" 
+  <class id="2" language="java" name="eu.project.rapid.as.installer.AccelerationServer.ClientListenerClear"
     project="AccelerationServer" file="/AccelerationServer/src/eu/project/rapid/as/AccelerationServer.java" 
     binary="false" corner="BOTTOM_RIGHT">    
     <position height="-1" width="-1" x="733" y="398"/>    
@@ -21,7 +21,7 @@
       <operations public="true" package="true" protected="true" private="true" static="true"/>    
     </display>  
   </class>  
-  <class id="3" language="java" name="eu.project.rapid.as.AccelerationServer.ClientListenerSSL" 
+  <class id="3" language="java" name="eu.project.rapid.as.installer.AccelerationServer.ClientListenerSSL"
     project="AccelerationServer" file="/AccelerationServer/src/eu/project/rapid/as/AccelerationServer.java" 
     binary="false" corner="BOTTOM_RIGHT">    
     <position height="-1" width="-1" x="733" y="584"/>    
@@ -31,7 +31,7 @@
       <operations public="true" package="true" protected="true" private="true" static="true"/>    
     </display>  
   </class>  
-  <class id="4" language="java" name="eu.project.rapid.as.AccelerationServer" project="AccelerationServer" 
+  <class id="4" language="java" name="eu.project.rapid.as.installer.AccelerationServer" project="AccelerationServer"
     file="/AccelerationServer/src/eu/project/rapid/as/AccelerationServer.java" binary="false" corner="BOTTOM_RIGHT">    
     <position height="389" width="215" x="213" y="26"/>    
     <display autosize="true" stereotype="true" package="true" initial-value="false" signature="true" 
@@ -40,7 +40,7 @@
       <operations public="true" package="true" protected="true" private="true" static="true"/>    
     </display>  
   </class>  
-  <class id="5" language="java" name="eu.project.rapid.as.AppHandler.Executer" project="AccelerationServer" 
+  <class id="5" language="java" name="eu.project.rapid.as.installer.AppHandler.Executer" project="AccelerationServer"
     file="/AccelerationServer/src/eu/project/rapid/as/AppHandler.java" binary="false" corner="BOTTOM_RIGHT">    
     <position height="-1" width="-1" x="722" y="762"/>    
     <display autosize="true" stereotype="true" package="true" initial-value="false" signature="true" 
@@ -49,7 +49,7 @@
       <operations public="true" package="true" protected="true" private="true" static="true"/>    
     </display>  
   </class>  
-  <class id="6" language="java" name="eu.project.rapid.as.AppHandler" project="AccelerationServer" 
+  <class id="6" language="java" name="eu.project.rapid.as.installer.AppHandler" project="AccelerationServer"
     file="/AccelerationServer/src/eu/project/rapid/as/AppHandler.java" binary="false" corner="BOTTOM_RIGHT">    
     <position height="-1" width="-1" x="282" y="763"/>    
     <display autosize="true" stereotype="true" package="true" initial-value="false" signature="true" 
@@ -58,7 +58,7 @@
       <operations public="true" package="true" protected="true" private="true" static="true"/>    
     </display>  
   </class>  
-  <class id="7" language="java" name="eu.project.rapid.as.DynamicObjectInputStream" project="AccelerationServer" 
+  <class id="7" language="java" name="eu.project.rapid.as.installer.DynamicObjectInputStream" project="AccelerationServer"
     file="/AccelerationServer/src/eu/project/rapid/as/DynamicObjectInputStream.java" binary="false" 
     corner="BOTTOM_RIGHT">    
     <position height="-1" width="-1" x="725" y="984"/>    
@@ -68,7 +68,7 @@
       <operations public="true" package="true" protected="true" private="true" static="true"/>    
     </display>  
   </class>  
-  <class id="8" language="java" name="eu.project.rapid.as.AccelerationServer.D2DBroadcastThread" 
+  <class id="8" language="java" name="eu.project.rapid.as.installer.AccelerationServer.D2DBroadcastThread"
     project="AccelerationServer" file="/AccelerationServer/src/eu/project/rapid/as/AccelerationServer.java" 
     binary="false" corner="BOTTOM_RIGHT">    
     <position height="-1" width="-1" x="738" y="212"/>    
@@ -78,7 +78,7 @@
       <operations public="true" package="true" protected="true" private="true" static="true"/>    
     </display>  
   </class>  
-  <class id="9" language="java" name="eu.project.rapid.as.AccelerationServerAutoStarter" project="AccelerationServer" 
+  <class id="9" language="java" name="eu.project.rapid.as.installer.AccelerationServerAutoStarter" project="AccelerationServer"
     file="/AccelerationServer/src/eu/project/rapid/as/AccelerationServerAutoStarter.java" binary="false" 
     corner="BOTTOM_RIGHT">    
     <position height="-1" width="-1" x="30" y="190"/>    
@@ -133,7 +133,7 @@
       <operations public="false" package="false" protected="false" private="false" static="true"/>    
     </display>  
   </class>  
-  <class id="15" language="java" name="eu.project.rapid.as.NetworkProfilerServer" project="AccelerationServer" 
+  <class id="15" language="java" name="eu.project.rapid.as.installer.NetworkProfilerServer" project="AccelerationServer"
     file="/AccelerationServer/src/eu/project/rapid/as/NetworkProfilerServer.java" binary="false" corner="BOTTOM_RIGHT">    
     <position height="-1" width="-1" x="1006" y="46"/>    
     <display autosize="true" stereotype="true" package="true" initial-value="false" signature="true" 

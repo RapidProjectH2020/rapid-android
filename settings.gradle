@@ -1,4 +1,4 @@
-include ':rapid-android-ac', ':rapid-gvirtus4a'
-include ':accelerationServer'
+include ':rapid-android-ac', ':rapid-gvirtus4a', ':rapid-as-installer'
+include ':rapid-android-as'
 // include ':rapid-common'
 // project(':rapid-common').projectDir = new File('../rapid-common/')

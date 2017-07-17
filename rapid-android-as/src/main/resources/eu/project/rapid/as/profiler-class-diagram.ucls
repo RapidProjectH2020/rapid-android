@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <class-diagram version="1.1.9" icons="true" automaticImage="PNG" always-add-relationships="false" generalizations="true" 
   realizations="true" associations="true" dependencies="false" nesting-relationships="true" router="FAN">  
-  <class id="1" language="java" name="eu.project.rapid.as.NetworkProfilerServer.ClientThread" 
+  <class id="1" language="java" name="eu.project.rapid.as.installer.NetworkProfilerServer.ClientThread"
     project="AccelerationServer" file="/AccelerationServer/src/eu/project/rapid/as/NetworkProfilerServer.java" 
     binary="false" corner="BOTTOM_RIGHT">    
     <position height="-1" width="-1" x="645" y="216"/>    
@@ -11,7 +11,7 @@
       <operations public="true" package="true" protected="true" private="true" static="true"/>    
     </display>  
   </class>  
-  <class id="2" language="java" name="eu.project.rapid.as.NetworkProfilerServer" project="AccelerationServer" 
+  <class id="2" language="java" name="eu.project.rapid.as.installer.NetworkProfilerServer" project="AccelerationServer"
     file="/AccelerationServer/src/eu/project/rapid/as/NetworkProfilerServer.java" binary="false" corner="BOTTOM_RIGHT">    
     <position height="-1" width="-1" x="372" y="217"/>    
     <display autosize="true" stereotype="true" package="true" initial-value="false" signature="true" 

@@ -23,7 +23,6 @@
     android:versionName="1.0" >
 
     <uses-permission android:name="android.permission.INTERNET" />
-    <uses-permission android:name="android.permission.INSTALL_PACKAGES" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
     <uses-permission android:name="android.permission.READ_PHONE_STATE" />
@@ -46,7 +45,7 @@
         <service android:name="eu.project.rapid.as.AccelerationServer"
             android:exported="false" >
             <intent-filter>
-                <action android:name="eu.project.rapid.as.AccelerationServer" />
+                <action android:name="eu.project.rapid.as.installer.AccelerationServer" />
             </intent-filter>
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />

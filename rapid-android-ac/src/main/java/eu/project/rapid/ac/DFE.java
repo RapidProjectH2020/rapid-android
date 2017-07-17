@@ -51,6 +51,8 @@ import java.security.UnrecoverableKeyException;
 import java.security.cert.Certificate;
 import java.security.cert.CertificateException;
 import java.util.Iterator;
+import java.util.LinkedList;
+import java.util.List;
 import java.util.TreeSet;
 import java.util.concurrent.BlockingDeque;
 import java.util.concurrent.CountDownLatch;
@@ -127,6 +129,7 @@ public class DFE {
     private static SparseArray<BlockingDeque<Object>> tasksResultsMap = new SparseArray<>();
     private static CountDownLatch waitForTaskRunners;
     private static final int nrTaskRunners = 3;
+    private static List<TaskRunner> taskRunnersList;
 
     // Get broadcast messages from the Rapid service. They will contain network measurements etc.
     private static BroadcastReceiver rapidBroadcastReceiver;
@@ -169,6 +172,7 @@ public class DFE {
         d2dSetReaderThread = (ScheduledThreadPoolExecutor) Executors.newScheduledThreadPool(1);
         threadPool = Executors.newFixedThreadPool(nrTaskRunners);
         waitForTaskRunners = new CountDownLatch(nrTaskRunners);
+        taskRunnersList = new LinkedList<>();
 
         rapidBroadcastReceiver = new RapidBroadcastReceiver();
         IntentFilter filter = new IntentFilter(RapidNetworkService.RAPID_NETWORK_CHANGED);
@@ -192,8 +196,10 @@ public class DFE {
     private void start() {
         netProfiler.registerNetworkStateTrackers();
 
-        // Start the service that will deal with the D2D communication
-        startD2DListeningService();
+        // Start the service that will deal with the Rapid registration and D2D communication
+        if (sClone == null) {
+            startRapidService();
+        }
 
         // Show a spinning dialog while connecting to the Manager and to the clone.
         this.pd = ProgressDialog.show(mContext, "Working...", "Initial network tasks...", true, false);
@@ -379,14 +385,17 @@ public class DFE {
 
             publishProgress("Starting the TaskRunner threads...");
             // Start TaskRunner threads that will handle the task dispatching process.
-            for (int i = 0; i < 10; i++) {
-                threadPool.submit(new TaskRunner(i));
+            for (int i = 0; i < nrTaskRunners; i++) {
+                TaskRunner t = new TaskRunner(i);
+                taskRunnersList.add(t);
+                threadPool.submit(t);
             }
             try {
                 waitForTaskRunners.await();
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
             }
+
             return null;
         }
 
@@ -427,10 +436,10 @@ public class DFE {
         // FIXME Should I also stop the D2D listening service here or should I leave it running?
     }
 
-    private void startD2DListeningService() {
-        Log.i(TAG, "Starting the D2D listening service...");
-        Intent d2dServiceIntent = new Intent(mContext, RapidNetworkService.class);
-        mContext.startService(d2dServiceIntent);
+    private void startRapidService() {
+        Log.i(TAG, "Starting the RAPID listening service...");
+        Intent rapidServiceIntent = new Intent(mContext, RapidNetworkService.class);
+        mContext.startService(rapidServiceIntent);
     }
 
     /**
@@ -526,19 +535,6 @@ public class DFE {
                     }, FREQUENCY_VM_CONNECTION, FREQUENCY_VM_CONNECTION, TimeUnit.MILLISECONDS
             );
 
-            // If the connection was successful then try to send the app to the clone
-            if (onLineClear || onLineSSL) {
-                Log.i(TAG, "The communication type established with the clone is: " + commType);
-                sendApk(is, os, oos);
-
-                try {
-                    ((DfeCallback) mContext).vmConnectionStatusUpdate(onLineClear || onLineSSL, commType);
-                } catch (ClassCastException e) {
-                    Log.i(TAG, "This class doesn't implement callback methods.");
-                }
-            } else {
-                Log.e(TAG, "Could not register with the VM");
-            }
             waitForTaskRunners.countDown();
 
             while (true) {
@@ -556,6 +552,7 @@ public class DFE {
                     if (!isDFEActive) {
                         Log.v(TAG, "The DFE is destroyed, exiting");
                         closeConnection();
+                        vmConnectionScheduledPool.shutdownNow();
                         break;
                     } else {
                         Thread.currentThread().interrupt();
@@ -596,6 +593,26 @@ public class DFE {
                     establishClearConnection();
                 }
             }
+
+            // If the connection was successful then try to send the app to the clone
+            if (onLineClear || onLineSSL) {
+                Log.i(TAG, "The communication type established with the clone is: " + commType);
+                sendApk(is, os, oos);
+            } else {
+                Log.e(TAG, "Could not register with the VM");
+            }
+            sendUpdateConnectionInfo();
+        }
+
+        /**
+         * Send update on the connection status to the client using the framework.
+         */
+        private void sendUpdateConnectionInfo() {
+            try {
+                ((DfeCallback) mContext).vmConnectionStatusUpdate(onLineClear || onLineSSL, commType);
+            } catch (ClassCastException e) {
+                Log.i(TAG, "This class doesn't implement callback methods.");
+            }
         }
 
         /**
@@ -626,7 +643,7 @@ public class DFE {
                 return onLineClear = true;
 
             } catch (Exception e) {
-                fallBackToLocalExecution("Connection setup with the clone failed: " + e);
+                fallBackToLocalExecution("Connection setup with the VM failed - " + e);
             } finally {
                 onLineSSL = false;
             }
@@ -723,7 +740,6 @@ public class DFE {
                     Log.e(TAG, "SSL handshake completed with errors: " + e);
                 }
             }
-
         }
 
         private void closeConnection() {
@@ -731,6 +747,7 @@ public class DFE {
             RapidUtils.closeQuietly(ois);
             RapidUtils.closeQuietly(s);
             onLineClear = onLineSSL = false;
+            sendUpdateConnectionInfo();
         }
 
         /**
@@ -927,9 +944,6 @@ public class DFE {
          * Execute method remotely
          *
          * @return result of execution, or an exception if it happened
-         * @throws NoSuchMethodException    If the method was not found in the object class.
-         * @throws ClassNotFoundException   If the class of the object could not be found by the classloader.
-         * @throws IllegalAccessException
          * @throws SecurityException
          * @throws IllegalArgumentException If the arguments passed to the method are not correct.
          */
@@ -972,9 +986,10 @@ public class DFE {
                 profiler.stopAndLogExecutionInfoTracking(prepareDataDuration, mPureRemoteDuration);
             } catch (Exception e) {
                 // No such host exists, execute locally
-                Log.e(TAG, "REMOTE ERROR: " + task.m.getName() + ": " + e);
+                fallBackToLocalExecution("REMOTE ERROR: " + task.m.getName() + ": " + e);
                 e.printStackTrace();
                 profiler.stopAndDiscardExecutionInfoTracking();
+                closeConnection();
                 result = executeLocally(task);
                 // ConnectionRepair repair = new ConnectionRepair();
                 // repair.start();
@@ -1028,34 +1043,34 @@ public class DFE {
 
             return result;
         }
-    }
 
-    /**
-     * Send the object (along with method and parameters) to the remote server for execution
-     *
-     * @throws IOException
-     */
-    private void sendObject(Task task, ObjectOutputStream oos)
-            throws IOException {
-        oos.reset();
-        Log.d(TAG, "Write Object and data");
+        /**
+         * Send the object (along with method and parameters) to the remote server for execution
+         *
+         * @throws IOException
+         */
+        private void sendObject(Task task, ObjectOutputStream oos)
+                throws IOException {
+            oos.reset();
+            Log.d(TAG, "Write Object and data");
 
-        // Send the number of clones needed to execute the method
-        oos.writeInt(nrClones);
+            // Send the number of clones needed to execute the method
+            oos.writeInt(nrClones);
 
-        // Send object for execution
-        oos.writeObject(task.o);
+            // Send object for execution
+            oos.writeObject(task.o);
 
-        // Send the method to be executed
-        // Log.d(TAG, "Write Method - " + m.getName());
-        oos.writeObject(task.m.getName());
+            // Send the method to be executed
+            // Log.d(TAG, "Write Method - " + m.getName());
+            oos.writeObject(task.m.getName());
 
-        // Log.d(TAG, "Write method parameter types");
-        oos.writeObject(task.m.getParameterTypes());
+            // Log.d(TAG, "Write method parameter types");
+            oos.writeObject(task.m.getParameterTypes());
 
-        // Log.d(TAG, "Write method parameter values");
-        oos.writeObject(task.pValues);
-        oos.flush();
+            // Log.d(TAG, "Write method parameter values");
+            oos.writeObject(task.pValues);
+            oos.flush();
+        }
     }
 
     private class RapidBroadcastReceiver extends BroadcastReceiver {
@@ -1075,6 +1090,16 @@ public class DFE {
                 case RapidNetworkService.RAPID_VM_CHANGED:
                     sClone = (Clone) intent.getSerializableExtra(RapidNetworkService.RAPID_VM_IP);
                     config.setClone(sClone);
+                    for (final TaskRunner t : taskRunnersList) {
+                        new Thread(
+                                new Runnable() {
+                                    @Override
+                                    public void run() {
+                                        t.registerWithVm();
+                                    }
+                                }
+                        ).start();
+                    }
                     break;
 
                 case RapidNetworkService.RAPID_D2D_SET_CHANGED:

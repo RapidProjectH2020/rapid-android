@@ -14,6 +14,7 @@ package eu.project.rapid.gvirtus4a;
 
 
 import android.os.StrictMode;
+import android.util.Log;
 
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
@@ -21,76 +22,84 @@ import java.io.IOException;
 import java.net.Socket;
 
 public final class Frontend {
-	private static Frontend frontend;
-	String serverIpAddress;
-	int port;
-	Socket socket;
-	static DataOutputStream outputStream;
-	static DataInputStream in;
-	static int resultBufferSize;
+
+    private static final String TAG = Frontend.class.getName();
+
+    private static Frontend frontend;
+    String serverIpAddress;
+    int port;
+    Socket socket;
+    static DataOutputStream outputStream;
+    static DataInputStream in;
+    static int resultBufferSize;
 
 
+    private Frontend(String serverIpAddress, int port) {
+        StrictMode.ThreadPolicy policy = new StrictMode.ThreadPolicy.Builder().permitAll().build();
+        StrictMode.setThreadPolicy(policy);
+        this.serverIpAddress = serverIpAddress;
+        this.port = port;
+        try {
+            socket = new Socket(serverIpAddress, port);
+            outputStream = new DataOutputStream(socket.getOutputStream());
+            in = new DataInputStream(socket.getInputStream());
+        } catch (IOException ex) {
+            // TODO gestire la mancata connessione
+            throw new RuntimeException(ex);
 
-	private Frontend(String serverIpAddress, int port) {
-		StrictMode.ThreadPolicy policy = new StrictMode.ThreadPolicy.Builder().permitAll().build();
-		StrictMode.setThreadPolicy(policy);
-		this.serverIpAddress = serverIpAddress;
-		this.port = port;
-		try {
-			socket = new Socket(serverIpAddress, port);
-			outputStream = new DataOutputStream(socket.getOutputStream());
-			in = new DataInputStream(socket.getInputStream());
-		} catch (IOException ex) {
-			// TODO gestire la mancata connessione
-			throw new RuntimeException(ex);
+        }
 
-		}
+    }
 
-	}
-
-	public static Frontend getFrontend(String serverIpAddress ,  int port)  {
-
-
-		if (frontend == null) {
-			frontend = new Frontend(serverIpAddress, port);
-		}
-		return frontend;
-	}
-
-	public static int Execute(String routine) throws IOException {
+    public static Frontend getFrontend(String serverIpAddress, int port) {
 
 
-		long size = Buffer.Size() / 2;
-		byte[] bits = Util.longToByteArray(size);
+        if (frontend == null) {
+            frontend = new Frontend(serverIpAddress, port);
+        }
+        return frontend;
+    }
+
+    public static int Execute(String routine) throws IOException {
+
+        Log.v(TAG, "Entered Execute() - " + Buffer.GetString());
+
+        long size = Buffer.Size() / 2;
+        byte[] bits = Util.longToByteArray(size);
 
         byte[] bytes2 = Util.hexToBytes(Buffer.GetString());
 
+        Log.v(TAG, "Execute 1");
 
-		byte[] outBuffer=new byte[routine.length()+1+bits.length+bytes2.length];
+        byte[] outBuffer = new byte[routine.length() + 1 + bits.length + bytes2.length];
 
-		int j=0;
-		for (int i = 0; i < routine.length(); i++) {
-			outBuffer[j] = (byte)routine.charAt(i);
-			j++;
-		}
-		outBuffer[j]=0;
-        j++;
-		for (int i = 0; i < bits.length; i++) {
-			outBuffer[j]=(byte) (bits[i] & 0xFF);
+        int j = 0;
+        for (int i = 0; i < routine.length(); i++) {
+            outBuffer[j] = (byte) routine.charAt(i);
             j++;
-		}
-
-        for (int i = 0; i < bytes2.length; i++) {
-            outBuffer[j]=(byte)(bytes2[i] & 0xFF);
+        }
+        outBuffer[j] = 0;
+        j++;
+        for (int i = 0; i < bits.length; i++) {
+            outBuffer[j] = (byte) (bits[i] & 0xFF);
             j++;
         }
 
-		outputStream.write(outBuffer);
+        for (int i = 0; i < bytes2.length; i++) {
+            outBuffer[j] = (byte) (bytes2[i] & 0xFF);
+            j++;
+        }
 
-		/**************/
+        Log.v(TAG, "Execute 2");
+
+        outputStream.write(outBuffer);
+
+        Log.v(TAG, "Execute 3");
+
+        /**************/
 
 		/*
-		 //System.out.println("Routine called: " + routine);
+         //System.out.println("Routine called: " + routine);
 		for (int i = 0; i < routine.length(); i++)
 			outputStream.writeByte(routine.charAt(i));
 		outputStream.writeByte(0);
@@ -117,149 +126,161 @@ public final class Frontend {
 		for (int i = 0; i < 7; i++)
 			in.readByte();
 		*/
-		byte[] inBuffer=new byte[12];
-		in.read(inBuffer,0,12);
-		int message=inBuffer[0];
-		resultBufferSize=inBuffer[4];
-		return message;
+		int expected = 12;
+        int totalRead = 0;
+        int read = 0;
+        byte[] inBuffer = new byte[expected];
+        while (totalRead < expected) {
+            Log.v(TAG, "Execute 3.1, number of bytes read: " + totalRead + ", expected: " + expected);
+            read = in.read(inBuffer, totalRead, expected - totalRead);
+            totalRead += read;
+            Log.v(TAG, "Execute 3.2, number of bytes read: " + totalRead + ", expected: " + expected);
+        }
+//        in.read(inBuffer, 0, 12);
 
-	}
+        Log.v(TAG, "Execute 4");
+
+        int message = inBuffer[0];
+        resultBufferSize = inBuffer[4];
+        return message;
+
+    }
 
 
-	public final static class Transmitter {
+    public final static class Transmitter {
 
-		public Transmitter() {
+        public Transmitter() {
 
-		}
+        }
 
-		public void writeLong(DataOutputStream os, long l) throws IOException {
-			os.write((byte) l);
-			os.write((byte) (l >> 56));
-			os.write((byte) (l >> 48));
-			os.write((byte) (l >> 40));
-			os.write((byte) (l >> 32));
-			os.write((byte) (l >> 24));
-			os.write((byte) (l >> 16));
-			os.write((byte) (l >> 8));
-		}
+        public void writeLong(DataOutputStream os, long l) throws IOException {
+            os.write((byte) l);
+            os.write((byte) (l >> 56));
+            os.write((byte) (l >> 48));
+            os.write((byte) (l >> 40));
+            os.write((byte) (l >> 32));
+            os.write((byte) (l >> 24));
+            os.write((byte) (l >> 16));
+            os.write((byte) (l >> 8));
+        }
 
-		public void writeChar(DataOutputStream os, char l) throws IOException {
-			os.write((byte) l);
-			os.write((byte) (l >> 56));
-			os.write((byte) (l >> 48));
-			os.write((byte) (l >> 40));
-			os.write((byte) (l >> 32));
-			os.write((byte) (l >> 24));
-			os.write((byte) (l >> 16));
-			os.write((byte) (l >> 8));
-		}
+        public void writeChar(DataOutputStream os, char l) throws IOException {
+            os.write((byte) l);
+            os.write((byte) (l >> 56));
+            os.write((byte) (l >> 48));
+            os.write((byte) (l >> 40));
+            os.write((byte) (l >> 32));
+            os.write((byte) (l >> 24));
+            os.write((byte) (l >> 16));
+            os.write((byte) (l >> 8));
+        }
 
-		public void writeInt(DataOutputStream os, int l) throws IOException {
-			os.write((byte) l);
-			os.write((byte) (l >> 24));
-			os.write((byte) (l >> 16));
-			os.write((byte) (l >> 8));
-		}
+        public void writeInt(DataOutputStream os, int l) throws IOException {
+            os.write((byte) l);
+            os.write((byte) (l >> 24));
+            os.write((byte) (l >> 16));
+            os.write((byte) (l >> 8));
+        }
 
-		public void writeHex(DataOutputStream os, long x) throws IOException {
-			String hex = Integer.toHexString((int) (x));
-			StringBuilder out2 = new StringBuilder();
-			int scarto = 0;
-			if (hex.length() > 2) {
-				for (int i = hex.length() - 1; i > 0; i -= 2) {
-					String str = hex.substring(i - 1, i + 1);
-					out2.insert(0, str);
-					os.write((byte) Integer.parseInt(out2.toString(), 16));
-					scarto += 2;
-				}
-				if (scarto != hex.length()) {
-					os.write((byte) Integer.parseInt(hex.substring(0, 1), 16));
-				}
-			}
-			os.write((byte) (0));
-			os.write((byte) (0));
-			os.write((byte) (0));
-			os.write((byte) (0));
-			os.write((byte) (0));
-			os.write((byte) (0));
-		}
+        public void writeHex(DataOutputStream os, long x) throws IOException {
+            String hex = Integer.toHexString((int) (x));
+            StringBuilder out2 = new StringBuilder();
+            int scarto = 0;
+            if (hex.length() > 2) {
+                for (int i = hex.length() - 1; i > 0; i -= 2) {
+                    String str = hex.substring(i - 1, i + 1);
+                    out2.insert(0, str);
+                    os.write((byte) Integer.parseInt(out2.toString(), 16));
+                    scarto += 2;
+                }
+                if (scarto != hex.length()) {
+                    os.write((byte) Integer.parseInt(hex.substring(0, 1), 16));
+                }
+            }
+            os.write((byte) (0));
+            os.write((byte) (0));
+            os.write((byte) (0));
+            os.write((byte) (0));
+            os.write((byte) (0));
+            os.write((byte) (0));
+        }
 
-		public char readChar(DataInputStream os) throws IOException {
-			int x;
-			x = os.readByte();
-			x = x >> 56;
-			x = os.readByte();
-			x = x >> 48;
-			x = os.readByte();
-			x = x >> 40;
-			x = os.readByte();
-			x = x >> 32;
-			x = os.readByte();
-			x = x >> 24;
-			x = os.readByte();
-			x = x >> 16;
-			x = os.readByte();
-			x = x >> 8;
-			x = os.readByte();
-			return (char) x;
+        public char readChar(DataInputStream os) throws IOException {
+            int x;
+            x = os.readByte();
+            x = x >> 56;
+            x = os.readByte();
+            x = x >> 48;
+            x = os.readByte();
+            x = x >> 40;
+            x = os.readByte();
+            x = x >> 32;
+            x = os.readByte();
+            x = x >> 24;
+            x = os.readByte();
+            x = x >> 16;
+            x = os.readByte();
+            x = x >> 8;
+            x = os.readByte();
+            return (char) x;
 
-		}
+        }
 
-		public static String getHex(int size) throws IOException {
-			byte[] array = new byte[size];
-			for (int i = 0; i < size; i++) {
-				byte bit = in.readByte();
-				array[i] = bit;
-			}
-			String hex = Util.bytesToHex(array);
-			return hex;
-		}
+        public static String getHex(int size) throws IOException {
+            byte[] array = new byte[size];
+            for (int i = 0; i < size; i++) {
+                byte bit = in.readByte();
+                array[i] = bit;
+            }
+            String hex = Util.bytesToHex(array);
+            return hex;
+        }
 
-		public static int getInt() throws IOException {
+        public static int getInt() throws IOException {
 
-			StringBuilder output = new StringBuilder();
-			for (int i = 0; i < 4; i++) {
-				byte bit = in.readByte();
-				int a = bit & 0xFF;
-				if (a == 0) {
-					output.insert(0, Integer.toHexString(a));
-					output.insert(0, Integer.toHexString(a));
-				} else {
-					output.insert(0, Integer.toHexString(a));
-				}
-			}
-			return Integer.parseInt(output.toString(), 16);
+            StringBuilder output = new StringBuilder();
+            for (int i = 0; i < 4; i++) {
+                byte bit = in.readByte();
+                int a = bit & 0xFF;
+                if (a == 0) {
+                    output.insert(0, Integer.toHexString(a));
+                    output.insert(0, Integer.toHexString(a));
+                } else {
+                    output.insert(0, Integer.toHexString(a));
+                }
+            }
+            return Integer.parseInt(output.toString(), 16);
 
-		}
+        }
 
-		public static long getLong() throws IOException {
+        public static long getLong() throws IOException {
 
-			StringBuilder output = new StringBuilder();
-			for (int i = 0; i < 8; i++) {
-				byte bit = in.readByte();
-				int a = bit & 0xFF;
-				if (a == 0) {
-					output.insert(0, Integer.toHexString(a));
-					output.insert(0, Integer.toHexString(a));
-				} else {
-					output.insert(0, Integer.toHexString(a));
-				}
-			}
-			return Long.parseLong(output.toString(), 16);
-		}
+            StringBuilder output = new StringBuilder();
+            for (int i = 0; i < 8; i++) {
+                byte bit = in.readByte();
+                int a = bit & 0xFF;
+                if (a == 0) {
+                    output.insert(0, Integer.toHexString(a));
+                    output.insert(0, Integer.toHexString(a));
+                } else {
+                    output.insert(0, Integer.toHexString(a));
+                }
+            }
+            return Long.parseLong(output.toString(), 16);
+        }
 
-		public static float getFloat() throws IOException {
-			byte[] inBuffer = new byte[4];
-			in.read(inBuffer,0,4);
-			return getFloat(inBuffer,0);
-		}
+        public static float getFloat() throws IOException {
+            byte[] inBuffer = new byte[4];
+            in.read(inBuffer, 0, 4);
+            return getFloat(inBuffer, 0);
+        }
 
-		public static float getFloat(byte[] inBuffer,int offset) throws IOException {
-			String output = Util.bytesToHex( new byte[]{inBuffer[offset+3],inBuffer[offset+2],inBuffer[offset+1],inBuffer[offset]});
-			Long i = Long.parseLong(output, 16);
-			Float f = Float.intBitsToFloat(i.intValue());
-			return f;
-		}
+        public static float getFloat(byte[] inBuffer, int offset) throws IOException {
+            String output = Util.bytesToHex(new byte[]{inBuffer[offset + 3], inBuffer[offset + 2], inBuffer[offset + 1], inBuffer[offset]});
+            Long i = Long.parseLong(output, 16);
+            Float f = Float.intBitsToFloat(i.intValue());
+            return f;
+        }
 
-	}
+    }
 }

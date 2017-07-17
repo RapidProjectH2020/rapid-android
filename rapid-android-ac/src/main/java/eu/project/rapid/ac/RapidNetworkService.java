@@ -97,7 +97,7 @@ public class RapidNetworkService extends IntentService {
     private static boolean registeringWithSlam = false;
 
     private Configuration config;
-    private boolean usePrevVm = true;
+    public static boolean usePrevVm = true;
     private Clone sClone;
     private long myId = -1;
     private String vmIp = "";

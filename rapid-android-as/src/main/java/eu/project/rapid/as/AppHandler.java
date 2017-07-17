@@ -101,7 +101,7 @@ public class AppHandler implements Runnable {
     private String apkFilePath; // the path where the apk is installed
     // I need this variable for when the DS starts the VM migration.
     // The AS will let the DS shut down the VM only if this is equal to 0.
-    private static AtomicInteger nrTasksCurrentlyBeingExecuted = new AtomicInteger(0);
+    private static final AtomicInteger nrTasksCurrentlyBeingExecuted = new AtomicInteger(0);
     private static AtomicBoolean migrationInProgress = new AtomicBoolean(false);
 
     /**
@@ -147,13 +147,19 @@ public class AppHandler implements Runnable {
                 switch (request) {
                     case RapidMessages.AC_OFFLOAD_REQ_AS:
 
-                        if (migrationInProgress.get()) {
-                            // Simply closing the connection will force the client to run tasks locally
-                            closeConnection();
-                            break;
-                        }
+                        Log.v(TAG, "Got a new request for execution");
+                        synchronized (nrTasksCurrentlyBeingExecuted) {
+                            if (migrationInProgress.get()) {
+                                Log.w(TAG, "VM upgrade in progress, cannot accept new tasks");
+                                // Simply closing the connection will force the client to run tasks locally
+                                closeConnection();
+                                break;
+                            }
 
-                        nrTasksCurrentlyBeingExecuted.incrementAndGet();
+                            nrTasksCurrentlyBeingExecuted.incrementAndGet();
+                            Log.v(TAG, "The new task is accepted for execution, total nr of tasks: "
+                                    + nrTasksCurrentlyBeingExecuted.get());
+                        }
 
                         // Start profiling on remote side
                         DeviceProfiler devProfiler = new DeviceProfiler(mContext);
@@ -184,8 +190,10 @@ public class AppHandler implements Runnable {
                             e.printStackTrace();
                             return;
                         } finally {
-                            nrTasksCurrentlyBeingExecuted.decrementAndGet();
-                            nrTasksCurrentlyBeingExecuted.notifyAll();
+                            synchronized (nrTasksCurrentlyBeingExecuted) {
+                                nrTasksCurrentlyBeingExecuted.decrementAndGet();
+                                nrTasksCurrentlyBeingExecuted.notifyAll();
+                            }
                         }
 
                         break;
@@ -242,16 +250,20 @@ public class AppHandler implements Runnable {
                     case RapidMessages.DS_MIGRATION_VM_AS:
                         // When the QoS are not respected, the VM will be upgraded.
                         // In that case, the DS informs the AS, so that the AS can inform the AC.
-                        Log.w(TAG, "The DS is informing that there will be a VM migration/update!");
+                        long userId = mObjIs.readLong();
+                        Log.w(TAG, "The VMM is informing that there will be a VM migration/update, user id = " + userId);
                         migrationInProgress.getAndSet(true);
 
-                        while (nrTasksCurrentlyBeingExecuted.get() > 0) {
-                            try {
-                                nrTasksCurrentlyBeingExecuted.wait();
-                            } catch (Exception e) {
-                                Log.v(TAG, "Exception while waiting for no more tasks in execution");
+                        synchronized (nrTasksCurrentlyBeingExecuted) {
+                            while (nrTasksCurrentlyBeingExecuted.get() > 0) {
+                                try {
+                                    nrTasksCurrentlyBeingExecuted.wait();
+                                } catch (Exception e) {
+                                    Log.v(TAG, "Exception while waiting for no more tasks in execution: " + e);
+                                }
                             }
                         }
+                        Log.v(TAG, "No more tasks under execution, informing the VMM that the upgrade can go on...");
                         mObjOs.writeByte(RapidMessages.OK);
                         mObjOs.flush();
                         break;

@@ -83,6 +83,7 @@ public class AccelerationServer extends Service {
     private Handler mBroadcastHandler;
     private Runnable mBroadcastRunnable;
     private ExecutorService threadPool = Executors.newFixedThreadPool(1000);
+    // FIXME: The OS returns i686 as architecture on the Android-x86 4.4 VM running on openstack.
     static String arch = System.getProperty("os.arch");
 
     // Using the BC
@@ -96,6 +97,9 @@ public class AccelerationServer extends Service {
     @Override
     public void onCreate() {
         super.onCreate();
+        if (arch == null || !arch.startsWith("x86")) {
+            arch = "x86";
+        }
         Log.d(TAG, "Server created, running on arch: " + arch);
     }
 
@@ -412,7 +416,7 @@ public class AccelerationServer extends Service {
             new Thread(new ClientListenerSSL(context, config)).start();
         } else {
             Log.w(TAG,
-                    "Cannot start the CloneSSLThread since the cryptographic initialization was not succesful");
+                    "Cannot start the CloneSSLThread since the cryptographic initialization was not successful");
         }
     }
 
@@ -462,7 +466,7 @@ public class AccelerationServer extends Service {
     /**
      * The thread that listens for new clients (phones or other clones) to connect using SSL.
      */
-    public class ClientListenerSSL implements Runnable {
+    private class ClientListenerSSL implements Runnable {
 
         private static final String TAG = "ClientListenerSSL";
 
