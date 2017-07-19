@@ -80,6 +80,7 @@ import eu.project.rapid.ac.profilers.ProgramProfiler;
 import eu.project.rapid.ac.utils.Constants;
 import eu.project.rapid.common.Clone;
 import eu.project.rapid.common.Configuration;
+import eu.project.rapid.common.RapidConstants;
 import eu.project.rapid.common.RapidConstants.COMM_TYPE;
 import eu.project.rapid.common.RapidConstants.ExecLocation;
 import eu.project.rapid.common.RapidMessages;
@@ -777,14 +778,14 @@ public class DFE {
 
                     // Send the file
                     Log.d(TAG, "Sending apk");
-                    int BUFFER_SIZE = 8192;
-                    byte[] tempArray = new byte[BUFFER_SIZE];
+                    byte[] tempArray = new byte[RapidConstants.BUFFER_SIZE_ANDROID];
                     int read;
                     while ((read = bis.read(tempArray, 0, tempArray.length)) > -1) {
-                        oos.write(tempArray, 0, read);
+                        os.write(tempArray, 0, read);
+//                        oos.write(tempArray, 0, read);
                         // Log.d(TAG, "Sent " + totalRead + " of " + apkFile.length() + " bytes");
                     }
-                    oos.flush();
+//                    oos.flush();
                     RapidUtils.closeQuietly(bis);
                 }
             } catch (IOException e) {
@@ -1129,7 +1130,7 @@ public class DFE {
         return mRegime;
     }
 
-    public void setNrClones(int nrClones) {
+    public void setNrVMs(int nrClones) {
         Log.i(TAG, "Changing nrClones to: " + nrClones);
         this.nrClones = nrClones;
     }

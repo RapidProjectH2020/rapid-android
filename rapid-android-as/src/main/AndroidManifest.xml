@@ -45,7 +45,7 @@
         <service android:name="eu.project.rapid.as.AccelerationServer"
             android:exported="false" >
             <intent-filter>
-                <action android:name="eu.project.rapid.as.installer.AccelerationServer" />
+                <action android:name="eu.project.rapid.as.AccelerationServer" />
             </intent-filter>
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
