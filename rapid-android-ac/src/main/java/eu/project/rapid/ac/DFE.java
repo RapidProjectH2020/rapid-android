@@ -80,7 +80,6 @@ import eu.project.rapid.ac.profilers.ProgramProfiler;
 import eu.project.rapid.ac.utils.Constants;
 import eu.project.rapid.common.Clone;
 import eu.project.rapid.common.Configuration;
-import eu.project.rapid.common.RapidConstants;
 import eu.project.rapid.common.RapidConstants.COMM_TYPE;
 import eu.project.rapid.common.RapidConstants.ExecLocation;
 import eu.project.rapid.common.RapidMessages;
@@ -778,7 +777,7 @@ public class DFE {
 
                     // Send the file
                     Log.d(TAG, "Sending apk");
-                    byte[] tempArray = new byte[RapidConstants.BUFFER_SIZE_ANDROID];
+                    byte[] tempArray = new byte[Constants.BUFFER_SIZE_APK];
                     int read;
                     while ((read = bis.read(tempArray, 0, tempArray.length)) > -1) {
                         os.write(tempArray, 0, read);

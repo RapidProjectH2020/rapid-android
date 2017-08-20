@@ -21,7 +21,8 @@ import java.io.File;
 
 public class Constants {
 
-    public static final int MAX_NUM_CLIENTS = 32;
+    public static final int BUFFER_SIZE_APK = 8192; // bytes
+    public static final int BUFFER_SIZE_SMALL = 8192; // bytes
 
     // The number of recent method executions to keep in DB so that they can be used for offloading
     // decision.

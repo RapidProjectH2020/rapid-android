@@ -47,7 +47,7 @@ android {
 }
 
 dependencies {
-    compile 'eu.project.rapid:rapid-common:0.0.4'
+    compile 'eu.project.rapid:rapid-common:0.0.5'
 //    compile project(':rapid-common')
 }
 

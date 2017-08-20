@@ -52,9 +52,9 @@ import java.util.zip.ZipFile;
 import dalvik.system.DexClassLoader;
 import eu.project.rapid.ac.ResultContainer;
 import eu.project.rapid.ac.profilers.DeviceProfiler;
+import eu.project.rapid.ac.utils.Constants;
 import eu.project.rapid.ac.utils.Utils;
 import eu.project.rapid.common.Configuration;
-import eu.project.rapid.common.RapidConstants;
 import eu.project.rapid.common.RapidMessages;
 import eu.project.rapid.common.RapidUtils;
 
@@ -75,9 +75,9 @@ public class AppHandler implements Runnable {
     // The main thread has vmId = 0
     // the vm helpers have vmId \in [1, nrVMs-1]
     private int vmHelperId = 0;
-    private final Socket mClient;
-    private DynamicObjectInputStream mObjIs;
-    private ObjectOutputStream mObjOs;
+    private final Socket mClientSocket;
+    private DynamicObjectInputStream mClientObjIs;
+    private ObjectOutputStream mClientObjOs;
     private final Context mContext;
 
     // The number of vm helpers requested (not considering the main VM)
@@ -129,7 +129,7 @@ public class AppHandler implements Runnable {
     public AppHandler(Socket pClient, final Context cW, Configuration config) {
         TAG = AppHandler.class.getName() + "-" + id.getAndIncrement();
         Log.d(TAG, "New Client connected");
-        this.mClient = pClient;
+        this.mClientSocket = pClient;
         this.mContext = cW;
         this.config = config;
     }
@@ -138,17 +138,17 @@ public class AppHandler implements Runnable {
     public void run() {
 
         try {
-            InputStream mIs = mClient.getInputStream();
-            OutputStream mOs = mClient.getOutputStream();
-            mObjIs = new DynamicObjectInputStream(mIs);
-            mObjOs = new ObjectOutputStream(mOs);
+            InputStream mClientIs = mClientSocket.getInputStream();
+            OutputStream mClientOs = mClientSocket.getOutputStream();
+            mClientObjIs = new DynamicObjectInputStream(mClientIs);
+            mClientObjOs = new ObjectOutputStream(mClientOs);
 
-            mObjIs.setClassLoaders(mCurrent, mCurrentDexLoader);
+            mClientObjIs.setClassLoaders(mCurrent, mCurrentDexLoader);
 
             int request = 0;
             while (request != -1) {
 
-                request = mIs.read();
+                request = mClientIs.read();
                 Log.d(TAG, "Request - " + request);
 
                 switch (request) {
@@ -173,7 +173,7 @@ public class AppHandler implements Runnable {
                         devProfiler.startDeviceProfiling();
 
                         Log.d(TAG, "Execute request - " + request);
-                        Object result = retrieveAndExecute(mObjIs);
+                        Object result = retrieveAndExecute(mClientObjIs);
 
                         // Delete the file containing the vmHelperId assigned to this vm
                         // (if such file does not exist do nothing)
@@ -185,10 +185,10 @@ public class AppHandler implements Runnable {
                             // Send back over the socket connection
 
                             // RapidUtils.sendAnimationMsg(config, RapidMessages.AC_RESULT_REMOTE);
-                            mObjOs.writeObject(result);
+                            mClientObjOs.writeObject(result);
                             // Clear ObjectOutputCache - Java caching unsuitable in this case
-                            mObjOs.flush();
-                            mObjOs.reset();
+                            mClientObjOs.flush();
+                            mClientObjOs.reset();
 
                             Log.d(TAG, "Result successfully sent");
 
@@ -207,25 +207,25 @@ public class AppHandler implements Runnable {
 
                     case RapidMessages.PING:
                         Log.d(TAG, "Reply to PING");
-                        mOs.write(RapidMessages.PONG);
+                        mClientOs.write(RapidMessages.PONG);
                         break;
 
                     case RapidMessages.AC_REGISTER_AS:
                         Log.d(TAG, "Registering apk");
-                        appName = (String) mObjIs.readObject();
+                        appName = (String) mClientObjIs.readObject();
                         Log.i(TAG, "apk name: " + appName);
 
-                        appLength = mObjIs.readInt();
+                        appLength = mClientObjIs.readInt();
                         apkFilePath = mContext.getFilesDir().getAbsolutePath() + "/" + appName + ".apk";
                         Log.d(TAG, "Registering apk: " + appName + " of size: " + appLength + " bytes");
                         if (apkPresent(apkFilePath, appName, appLength)) {
                             Log.d(TAG, "APK present");
-                            mOs.write(RapidMessages.AS_APP_PRESENT_AC);
+                            mClientOs.write(RapidMessages.AS_APP_PRESENT_AC);
                         } else {
                             Log.d(TAG, "Request APK");
-                            mOs.write(RapidMessages.AS_APP_REQ_AC);
+                            mClientOs.write(RapidMessages.AS_APP_REQ_AC);
                             // Receive the apk file from the client
-                            receiveApk(mIs, mObjIs, apkFilePath);
+                            receiveApk(mClientIs, apkFilePath);
 
                             // Delete the old .dex file of this apk to avoid the crash due to dexopt:
                             // DexOpt: source file mod time mismatch (457373af vs 457374dd)
@@ -244,20 +244,20 @@ public class AppHandler implements Runnable {
                         File dexFile = new File(apkFilePath);
                         Log.d(TAG, "APK file size on disk: " + dexFile.length());
                         addLibraries(dexFile);
-                        mCurrentDexLoader = mObjIs.addDex(dexFile);
+                        mCurrentDexLoader = mClientObjIs.addDex(dexFile);
                         Log.d(TAG, "DEX file added.");
 
                         break;
 
                     case RapidMessages.CLONE_ID_SEND:
-                        vmHelperId = mIs.read();
+                        vmHelperId = mClientIs.read();
                         Utils.writeCloneHelperId(vmHelperId);
                         break;
 
                     case RapidMessages.DS_MIGRATION_VM_AS:
                         // When the QoS are not respected, the VM will be upgraded.
                         // In that case, the DS informs the AS, so that the AS can inform the AC.
-                        long userId = mObjIs.readLong();
+                        long userId = mClientObjIs.readLong();
                         Log.w(TAG, "The VMM is informing that there will be a VM migration/update, user id = " + userId);
                         migrationInProgress.getAndSet(true);
 
@@ -271,8 +271,8 @@ public class AppHandler implements Runnable {
                             }
                         }
                         Log.v(TAG, "No more tasks under execution, informing the VMM that the upgrade can go on...");
-                        mObjOs.writeByte(RapidMessages.OK);
-                        mObjOs.flush();
+                        mClientObjOs.writeByte(RapidMessages.OK);
+                        mClientObjOs.flush();
                         break;
                 }
             }
@@ -300,9 +300,9 @@ public class AppHandler implements Runnable {
     }
 
     private void closeConnection() {
-        RapidUtils.closeQuietly(mObjOs);
-        RapidUtils.closeQuietly(mObjIs);
-        RapidUtils.closeQuietly(mClient);
+        RapidUtils.closeQuietly(mClientObjOs);
+        RapidUtils.closeQuietly(mClientObjIs);
+        RapidUtils.closeQuietly(mClientSocket);
     }
 
     /**
@@ -325,35 +325,35 @@ public class AppHandler implements Runnable {
     }
 
     /**
-     * Method to retrieve an apk of an application that needs to be executed
+     * Method to retrieve an apk of an application that needs to be executed.
      *
-     * @param objIn Object input stream to simplify retrieval of data
+     * @param is Input stream to simplify retrieval of data
      */
-    private void receiveApk(InputStream is, DynamicObjectInputStream objIn, String apkFilePath) {
+    private void receiveApk(InputStream is, String apkFilePath) {
         // Receiving the apk file
         // Get the length of the file receiving
         try {
             // Write it to the filesystem
             File apkFile = new File(apkFilePath);
             FileOutputStream fout = new FileOutputStream(apkFile);
-            BufferedOutputStream bout = new BufferedOutputStream(fout, RapidConstants.BUFFER_SIZE_ANDROID);
+            BufferedOutputStream bout = new BufferedOutputStream(fout, Constants.BUFFER_SIZE_APK);
 
             // Get the apk file
             Log.d(TAG, "Starting reading apk file of size: " + appLength + " bytes");
-            byte[] tempArray = new byte[RapidConstants.BUFFER_SIZE_ANDROID];
+            byte[] tempArray = new byte[Constants.BUFFER_SIZE_APK];
             int read;
             int totalRead = 0;
             int prevPerc = 0;
             int currPerc;
             while (totalRead < appLength) {
-//                read = objIn.read(tempArray);
+//                Log.v(TAG, "Waiting to receive " + (appLength - totalRead) + " more bytes...");
                 read = is.read(tempArray);
                 totalRead += read;
-                // Log.d(TAG, "Read " + read + " bytes");
+//                Log.v(TAG, "Read " + read + " bytes");
                 bout.write(tempArray, 0, read);
 
                 currPerc = (int) (((double) totalRead / appLength) * 100);
-                if (currPerc % 10 > prevPerc) {
+                if (currPerc / 10 > prevPerc / 10) {
                     Log.d(TAG, "Got: " + currPerc + " % of the apk.");
                     Log.d(TAG, "TotalRead: " + totalRead + " of " + appLength + " bytes");
                     prevPerc = currPerc;
@@ -463,11 +463,11 @@ public class AppHandler implements Runnable {
 
                     Log.d(TAG, "Writing lib file to " + libFile.getAbsolutePath());
                     FileOutputStream fos = new FileOutputStream(libFile);
-                    BufferedOutputStream dest = new BufferedOutputStream(fos, RapidConstants.BUFFER_SIZE_ANDROID);
+                    BufferedOutputStream dest = new BufferedOutputStream(fos, Constants.BUFFER_SIZE_SMALL);
 
-                    byte data[] = new byte[RapidConstants.BUFFER_SIZE_ANDROID];
+                    byte data[] = new byte[Constants.BUFFER_SIZE_SMALL];
                     int count;
-                    while ((count = is.read(data, 0, RapidConstants.BUFFER_SIZE_ANDROID)) != -1) {
+                    while ((count = is.read(data, 0, Constants.BUFFER_SIZE_SMALL)) != -1) {
                         dest.write(data, 0, count);
                     }
                     dest.flush();
@@ -563,8 +563,12 @@ public class AppHandler implements Runnable {
 
                 if (withMultipleVMs) {
                     Log.i(TAG, "The VMs are successfully allocated.");
-                    dsOos.writeByte(RapidMessages.PARALLEL_START);
-                    dsOos.flush();
+                    try {
+                        dsOos.writeByte(RapidMessages.PARALLEL_START);
+                        dsOos.flush();
+                    } catch (Exception e) {
+                        Log.e(TAG, "Exception while sending PARALLEL_START to the DS: " + e);
+                    }
 
                     // Assign the IDs to the new vm helpers
                     Log.i(TAG, "The helper VMs:");
@@ -694,8 +698,12 @@ public class AppHandler implements Runnable {
                     e.printStackTrace();
                 }
 
-                dsOos.writeByte(RapidMessages.PARALLEL_END);
-                dsOos.flush();
+                try {
+                    dsOos.writeByte(RapidMessages.PARALLEL_END);
+                    dsOos.flush();
+                } catch (Exception e) {
+                    Log.e(TAG, "Exception while sending PARALLEL_END to the DS: " + e);
+                }
             }
 
             // If this is the main vm send back also the object to execute,
@@ -818,13 +826,13 @@ public class AppHandler implements Runnable {
      */
     private class VMHelperThread extends Thread {
 
-        private String TAG = "ServerHelper-";
+        private String TAG = "VMHelperThread-";
         String vmHelperIp;
-        private Socket mSocket;
-        private OutputStream mOutStream;
-        private InputStream mInStream;
-        private ObjectOutputStream mObjOutStream;
-        private DynamicObjectInputStream mObjInStream;
+        private Socket vmHelperSocket;
+        private OutputStream vmHelperOutStream;
+        private InputStream vmHelperInStream;
+        private ObjectOutputStream vmHelperObjOutStream;
+        private DynamicObjectInputStream vmHelperObjInStream;
 
         // This id is assigned to the vm helper by the main vm.
         // It is needed for splitting the input when parallelizing a certain method (see for example
@@ -852,8 +860,8 @@ public class AppHandler implements Runnable {
                 }
 
                 // Send the vmId to this vm.
-                mOutStream.write(RapidMessages.CLONE_ID_SEND);
-                mOutStream.write(vmHelperId);
+                vmHelperOutStream.write(RapidMessages.CLONE_ID_SEND);
+                vmHelperOutStream.write(vmHelperId);
 
                 while (true) {
 
@@ -886,12 +894,12 @@ public class AppHandler implements Runnable {
                             break;
 
                         case RapidMessages.AC_REGISTER_AS:
-                            mOutStream.write(RapidMessages.AC_REGISTER_AS);
-                            mObjOutStream.writeObject(appName);
-                            mObjOutStream.writeInt(appLength);
-                            mObjOutStream.flush();
+                            vmHelperOutStream.write(RapidMessages.AC_REGISTER_AS);
+                            vmHelperObjOutStream.writeObject(appName);
+                            vmHelperObjOutStream.writeInt(appLength);
+                            vmHelperObjOutStream.flush();
 
-                            int response = mInStream.read();
+                            int response = vmHelperInStream.read();
 
                             if (response == RapidMessages.AS_APP_REQ_AC) {
                                 // Send the APK file if needed
@@ -900,16 +908,17 @@ public class AppHandler implements Runnable {
                                 File apkFile = new File(apkFilePath);
                                 FileInputStream fin = new FileInputStream(apkFile);
                                 BufferedInputStream bis = new BufferedInputStream(fin);
-                                byte[] tempArray = new byte[RapidConstants.BUFFER_SIZE_ANDROID];
+                                byte[] tempArray = new byte[Constants.BUFFER_SIZE_APK];
                                 int read;
+                                int totalRead = 0;
                                 Log.d(TAG, "Sending apk");
                                 while ((read = bis.read(tempArray, 0, tempArray.length)) > -1) {
-                                    mOutStream.write(tempArray, 0, read);
-//                                    mObjOutStream.write(tempArray, 0, read);
+//                                    Log.v(TAG, "Sending " + read + " bytes...");
+                                    totalRead += read;
+                                    vmHelperOutStream.write(tempArray, 0, read);
+//                                    Log.v(TAG, totalRead + " bytes sent in total so far, out of " + appLength);
                                 }
                                 Log.d(TAG, "Finished sending the apk!");
-//                                mObjOutStream.flush();
-//                                Log.d(TAG, "Finished sending the apk");
                                 bis.close();
                             } else if (response == RapidMessages.AS_APP_PRESENT_AC) {
                                 Log.d(TAG, "Application already registered on VM " + vmHelperIp);
@@ -919,22 +928,22 @@ public class AppHandler implements Runnable {
                         case RapidMessages.AC_OFFLOAD_REQ_AS:
                             Log.d(TAG, "Asking VM Helper " + vmHelperIp + " to parallelize the execution");
 
-                            mOutStream.write(RapidMessages.AC_OFFLOAD_REQ_AS);
+                            vmHelperOutStream.write(RapidMessages.AC_OFFLOAD_REQ_AS);
 
                             // Send the number of VMs needed.
                             // Since this is a helper VM, only one vm should be requested.
-                            mObjOutStream.writeInt(1);
-                            mObjOutStream.writeObject(objToExecute);
-                            mObjOutStream.writeObject(methodName);
-                            mObjOutStream.writeObject(pTypes);
-                            mObjOutStream.writeObject(pValues);
-                            mObjOutStream.flush();
+                            vmHelperObjOutStream.writeInt(1);
+                            vmHelperObjOutStream.writeObject(objToExecute);
+                            vmHelperObjOutStream.writeObject(methodName);
+                            vmHelperObjOutStream.writeObject(pTypes);
+                            vmHelperObjOutStream.writeObject(pValues);
+                            vmHelperObjOutStream.flush();
 
                             // This is the response from the vm helper, which is a partial result of the method
                             // execution. This partial result is stored in an array, and will be later composed
                             // with the other partial results of the other VMs to obtain the total desired
                             // result to be sent back to the phone.
-                            Object vmHelperResult = mObjInStream.readObject();
+                            Object vmHelperResult = vmHelperObjInStream.readObject();
 
                             ResultContainer container = (ResultContainer) vmHelperResult;
 
@@ -965,13 +974,13 @@ public class AppHandler implements Runnable {
 
                 Log.d(TAG, "Trying to connect to vm " + vmHelperIp + ":" + config.getClonePort());
 
-                mSocket = new Socket();
-                mSocket.connect(new InetSocketAddress(vmHelperIp, config.getClonePort()), 5 * 1000);
+                vmHelperSocket = new Socket();
+                vmHelperSocket.connect(new InetSocketAddress(vmHelperIp, config.getClonePort()), 5 * 1000);
 
-                mOutStream = mSocket.getOutputStream();
-                mInStream = mSocket.getInputStream();
-                mObjOutStream = new ObjectOutputStream(mOutStream);
-                mObjInStream = new DynamicObjectInputStream(mInStream);
+                vmHelperOutStream = vmHelperSocket.getOutputStream();
+                vmHelperInStream = vmHelperSocket.getInputStream();
+                vmHelperObjOutStream = new ObjectOutputStream(vmHelperOutStream);
+                vmHelperObjInStream = new DynamicObjectInputStream(vmHelperInStream);
 
                 Log.d(TAG, "Connection established with vm " + vmHelperIp);
 
@@ -989,10 +998,10 @@ public class AppHandler implements Runnable {
             try {
                 // Send a message to the Server Helper (other server)
                 Log.d(TAG, "PING other server");
-                mOutStream.write(eu.project.rapid.common.RapidMessages.PING);
+                vmHelperOutStream.write(eu.project.rapid.common.RapidMessages.PING);
 
                 // Read and display the response message sent by server helper
-                int response = mInStream.read();
+                int response = vmHelperInStream.read();
 
                 if (response == RapidMessages.PONG)
                     Log.d(TAG, "PONG from other server: " + vmHelperIp + ":" + config.getClonePort());
@@ -1005,9 +1014,9 @@ public class AppHandler implements Runnable {
         }
 
         private void closeConnection() {
-            RapidUtils.closeQuietly(mObjOutStream);
-            RapidUtils.closeQuietly(mObjInStream);
-            RapidUtils.closeQuietly(mSocket);
+            RapidUtils.closeQuietly(vmHelperObjOutStream);
+            RapidUtils.closeQuietly(vmHelperObjInStream);
+            RapidUtils.closeQuietly(vmHelperSocket);
         }
     }
 }
