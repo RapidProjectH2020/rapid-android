@@ -2,11 +2,11 @@ apply plugin: 'com.android.application'
 
 android {
     compileSdkVersion 25
-    buildToolsVersion "25.0.2"
+    buildToolsVersion "25.0.3"
 
     defaultConfig {
         applicationId "eu.project.rapid.as"
-        minSdkVersion 19
+        minSdkVersion 15
 
         // If I set a higher target I would need to deal with runtime permissions,
         // which cannot be done automatically without user intervention.
