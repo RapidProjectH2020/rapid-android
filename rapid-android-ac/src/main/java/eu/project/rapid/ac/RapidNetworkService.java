@@ -501,7 +501,7 @@ public class RapidNetworkService extends IntentService {
         }
     }
 
-    private boolean registerWithDsAndSlam() {
+    private synchronized boolean registerWithDsAndSlam() {
         i(TAG, "Registering...");
         boolean registeredWithSlam = false;
 
