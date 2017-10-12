@@ -18,6 +18,7 @@ package eu.project.rapid.as;
 import android.app.Service;
 import android.content.Context;
 import android.content.Intent;
+import android.net.wifi.WifiManager;
 import android.os.Build;
 import android.os.Handler;
 import android.os.IBinder;
@@ -558,7 +559,9 @@ public class AccelerationServer extends Service {
                         if (myIpAddress != null) {
                             Log.i(TAG, "My IP address: " + myIpAddress.getHostAddress());
 
-                            InetAddress broadcastAddress = Utils.getBroadcast(myIpAddress);
+//                            InetAddress broadcastAddress = Utils.getBroadcast(myIpAddress);
+                            InetAddress broadcastAddress = Utils.getBroadcastAddress(
+                                    (WifiManager) getApplicationContext().getSystemService(WIFI_SERVICE));
                             Log.i(TAG, "Broadcast IP address: " + broadcastAddress);
                             try {
                                 packet = new DatagramPacket(data, data.length, broadcastAddress,

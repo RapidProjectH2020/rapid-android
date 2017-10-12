@@ -422,7 +422,7 @@ public class RapidNetworkService extends IntentService {
     }
 
     private void broadcastD2dDevices() {
-        i(TAG, "Broadcasting set of d2d devices, if not empty (size: " +
+        i(TAG, "Broadcasting (internally) set of d2d devices, if not empty (size: " +
                 (setD2dPhones != null ? setD2dPhones.size() : "null") + ")");
         if (setD2dPhones != null && setD2dPhones.size() > 0) {
             Intent i = new Intent(RAPID_D2D_SET_CHANGED);

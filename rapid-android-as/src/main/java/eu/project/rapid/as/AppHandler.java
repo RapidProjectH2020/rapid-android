@@ -31,6 +31,7 @@ import java.io.ObjectOutputStream;
 import java.io.OutputStream;
 import java.lang.reflect.Array;
 import java.lang.reflect.Constructor;
+import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.net.InetSocketAddress;
@@ -81,7 +82,7 @@ public class AppHandler implements Runnable {
     private final Context mContext;
 
     // The number of vm helpers requested (not considering the main VM)
-    private static int numberOfVMHelpers = 0;
+    private int numberOfVMHelpers = 0;
     private Boolean[] pausedHelper; // Needed for synchronization with the vm helpers
     private int requestFromMainServer = 0; // The main vm sends commands to the vm helpers
     private Object responsesFromServers; // Array of partial results returned by the vm helpers
@@ -553,158 +554,24 @@ public class AppHandler implements Runnable {
             // private originally)
             runMethod.setAccessible(true); // Set the method to be accessible
 
+            // Start preparing for parallel execution, talk to DS to allocate helper VMs, etc.
             if (withMultipleVMs) {
-                pausedHelper = new Boolean[numberOfVMHelpers + 1];
-                for (int i = 1; i < numberOfVMHelpers + 1; i++) {
-                    pausedHelper[i] = true;
-                }
-
-                withMultipleVMs = askDsForVMHelpers();
-
-                if (withMultipleVMs) {
-                    Log.i(TAG, "The VMs are successfully allocated.");
-                    try {
-                        dsOos.writeByte(RapidMessages.PARALLEL_START);
-                        dsOos.flush();
-                    } catch (Exception e) {
-                        Log.e(TAG, "Exception while sending PARALLEL_START to the DS: " + e);
-                    }
-
-                    // Assign the IDs to the new vm helpers
-                    Log.i(TAG, "The helper VMs:");
-                    int vmHelperId = 1;
-                    for (String vmHelperIp : vmHelperIPs) {
-                        Log.i(TAG, vmHelperIp);
-                        // Start the thread that should connect to the vm helper
-                        (new VMHelperThread(vmHelperId++, vmHelperIp)).start();
-                    }
-
-                    returnType = runMethod.getReturnType(); // the return type of the offloaded method
-
-                    // Allocate the space for the responses from the other VMs
-                    responsesFromServers = Array.newInstance(returnType, numberOfVMHelpers + 1);
-
-                    // Wait until all the threads are connected to the vm helpers
-                    waitForVMHelpersToBeReady();
-
-                    // Give the command to register the app first
-                    sendCommandToAllHelperThreads(RapidMessages.AC_REGISTER_AS);
-
-                    // Wait again for the threads to be ready
-                    waitForVMHelpersToBeReady();
-
-                    // And send a ping to all VMs just for testing
-                    // sendCommandToAllHelperThreads(RapidMessages.PING);
-                    // waitForVMHelpersToBeReady();
-
-                    // Wake up the server helper threads and tell them to send the object to execute, the
-                    // method, parameter types and parameter values
-
-                    sendCommandToAllHelperThreads(RapidMessages.AC_OFFLOAD_REQ_AS);
-                } else {
-                    Log.i(TAG, "Could not allocate other VMs, doing only my part of the job.");
-                }
+                withMultipleVMs = startParallelOrForwardingExecution(runMethod, false);
             }
 
+            // Run the method on this VM
+            long startExecTime = System.nanoTime();
             // Run the method and retrieve the result
-            Object result;
-            Long execDuration = null;
-            try {
-                // RapidUtils.sendAnimationMsg(config, RapidMessages.AC_EXEC_REMOTE);
-                Long startExecTime = System.nanoTime();
-                try {
-                    // long s = System.nanoTime();
-                    Method prepareDataMethod =
-                            objToExecute.getClass().getDeclaredMethod("prepareDataOnServer");
-                    prepareDataMethod.setAccessible(true);
-                    // RapidUtils.sendAnimationMsg(config, RapidMessages.AC_PREPARE_DATA);
-                    long s = System.nanoTime();
-                    prepareDataMethod.invoke(objToExecute);
-                    long prepareDataDuration = System.nanoTime() - s;
-                    Log.w(TAG, "Executed method prepareDataOnServer() on " + (prepareDataDuration / 1000000)
-                            + " ms");
+            Object result = executeMethod(objClass, runMethod);
+            long execDuration = System.nanoTime() - startExecTime;
 
-                } catch (NoSuchMethodException e) {
-                    Log.w(TAG, "The method prepareDataOnServer() does not exist");
-                }
-
-                result = runMethod.invoke(objToExecute, pValues);
-                execDuration = System.nanoTime() - startExecTime;
-                Log.d(TAG,
-                        runMethod.getName() + ": pure execution time - " + (execDuration / 1000000) + "ms");
-            } catch (InvocationTargetException e) {
-                // The method might have failed if the required shared library
-                // had not been loaded before, try loading the apk's libraries and
-                // restarting the method
-                if (e.getTargetException() instanceof UnsatisfiedLinkError
-                        || e.getTargetException() instanceof ExceptionInInitializerError) {
-                    Log.d(TAG, "UnsatisfiedLinkError thrown, loading libs and retrying");
-
-                    Method libLoader = objClass.getMethod("loadLibraries", LinkedList.class);
-                    try {
-                        libLoader.invoke(objToExecute, libraries);
-                        // RapidUtils.sendAnimationMsg(config, RapidMessages.AC_EXEC_REMOTE);
-                        Long startExecTime = System.nanoTime();
-                        result = runMethod.invoke(objToExecute, pValues);
-                        execDuration = System.nanoTime() - startExecTime;
-                        Log.d(TAG,
-                                runMethod.getName() + ": pure execution time - " + (execDuration / 1000000) + "ms");
-                    } catch (InvocationTargetException e1) {
-                        Log.e(TAG, "InvocationTargetException after loading the libraries");
-                        result = e1;
-                        e1.printStackTrace();
-                    }
-                } else {
-                    Log.w(TAG, "The remote execution resulted in exception:  " + e);
-                    result = e;
-                    e.printStackTrace();
-                }
+            // If a parallel execution was performed correctly, reduce the partial results.
+            if (withMultipleVMs) {
+                result = reduceResults(objClass, result, false);
             }
 
             Log.d(TAG, runMethod.getName() + ": retrieveAndExecute time - "
                     + ((System.nanoTime() - startTime) / 1000000) + "ms");
-
-            if (withMultipleVMs) {
-                // Wait for all the VMs to finish execution before returning the result
-                waitForVMHelpersToBeReady();
-                Log.d(TAG, "All servers finished execution, send result back.");
-
-                // Kill the threads.
-                sendCommandToAllHelperThreads(-1);
-
-                // put the result of the main vm as the first element of the array
-                synchronized (responsesFromServers) {
-                    Array.set(responsesFromServers, 0, result);
-                }
-
-                // Call the reduce function implemented by the developer to combine the partial results.
-                try {
-                    // Array of the returned type
-                    Class<?> arrayReturnType =
-                            Array.newInstance(returnType, numberOfVMHelpers + 1).getClass();
-                    Method runMethodReduce =
-                            objClass.getDeclaredMethod(methodName + "Reduce", arrayReturnType);
-                    runMethodReduce.setAccessible(true);
-                    Log.i(TAG, "Reducing the results using the method: " + runMethodReduce.getName());
-
-                    Object reducedResult =
-                            runMethodReduce.invoke(objToExecute, new Object[]{responsesFromServers});
-                    result = reducedResult;
-
-                    Log.i(TAG, "The reduced result: " + reducedResult);
-
-                } catch (Exception e) {
-                    Log.e(TAG, "Impossible to reduce the result");
-                    e.printStackTrace();
-                }
-
-                try {
-                    dsOos.writeByte(RapidMessages.PARALLEL_END);
-                    dsOos.flush();
-                } catch (Exception e) {
-                    Log.e(TAG, "Exception while sending PARALLEL_END to the DS: " + e);
-                }
-            }
 
             // If this is the main vm send back also the object to execute,
             // otherwise the helper VMs don't need to send it back.
@@ -723,6 +590,232 @@ public class AppHandler implements Runnable {
             RapidUtils.closeQuietly(dsOis);
             RapidUtils.closeQuietly(dsOos);
             RapidUtils.closeQuietly(dsSocket);
+        }
+    }
+
+    private Object executeMethod(Class<?> objClass, Method runMethod) throws IllegalAccessException {
+        long startExecTime;
+        long execDuration = -1;
+        Object result = null;
+
+        // RapidUtils.sendAnimationMsg(config, RapidMessages.AC_EXEC_REMOTE);
+        try {
+            // long s = System.nanoTime();
+            Method prepareDataMethod =
+                    objToExecute.getClass().getDeclaredMethod("prepareDataOnServer");
+            prepareDataMethod.setAccessible(true);
+            // RapidUtils.sendAnimationMsg(config, RapidMessages.AC_PREPARE_DATA);
+            long s = System.nanoTime();
+            prepareDataMethod.invoke(objToExecute);
+            long prepareDataDuration = System.nanoTime() - s;
+            Log.w(TAG, "Executed method prepareDataOnServer() on " + (prepareDataDuration / 1000000)
+                    + " ms");
+        } catch (NoSuchMethodException e) {
+            Log.w(TAG, "The method prepareDataOnServer() does not exist: " + e);
+        } catch (InvocationTargetException e) {
+            Log.w(TAG, "Could not run method prepareDataOnServer(): " + e);
+            e.printStackTrace();
+        }
+
+        try {
+            startExecTime = System.nanoTime();
+            result = runMethod.invoke(objToExecute, pValues);
+            execDuration = System.nanoTime() - startExecTime;
+        } catch (OutOfMemoryError error) {
+            Log.w(TAG, "OutOfMemoryError was thrown, trying to forward execution: " + error);
+            result = forwardExecution(objClass, runMethod);
+        } catch (InvocationTargetException e) {
+            // The method might have failed if the required shared library
+            // had not been loaded before, try loading the apk's libraries and
+            // restarting the method
+            if (e.getTargetException() instanceof UnsatisfiedLinkError
+                    || e.getTargetException() instanceof ExceptionInInitializerError) {
+                Log.d(TAG, "UnsatisfiedLinkError thrown, loading libs and retrying");
+
+                try {
+                    Method libLoader = objClass.getMethod("loadLibraries", LinkedList.class);
+                    libLoader.invoke(objToExecute, libraries);
+                    // RapidUtils.sendAnimationMsg(config, RapidMessages.AC_EXEC_REMOTE);
+                    startExecTime = System.nanoTime();
+                    result = runMethod.invoke(objToExecute, pValues);
+                    execDuration = System.nanoTime() - startExecTime;
+                } catch (OutOfMemoryError error) {
+                    Log.w(TAG, "OutOfMemoryError was thrown, trying to forward execution: " + error);
+                    result = forwardExecution(objClass, runMethod);
+                } catch (InvocationTargetException e1) {
+                    Log.e(TAG, "InvocationTargetException after loading the libraries");
+                    result = e1;
+                    e1.printStackTrace();
+                } catch (NoSuchMethodException e1) {
+                    result = e1;
+                    e1.printStackTrace();
+                }
+            } else {
+                Log.w(TAG, "The remote execution resulted in exception:  " + e);
+                result = e;
+                e.printStackTrace();
+            }
+        }
+        Log.d(TAG,
+                runMethod.getName() + ": pure execution time - " + (execDuration / 1000000) + "ms");
+        return result;
+    }
+
+    private Object forwardExecution(Class<?> objClass, Method runMethod) {
+        Object result = null;
+
+        //
+        try {
+            Field enforceForwarding = objClass.getField("enforceForwarding");
+            enforceForwarding.setAccessible(true);
+            enforceForwarding.setBoolean(objToExecute, false);
+        } catch (NoSuchFieldException e) {
+            Log.i(TAG, "There is no field 'enforceForwarding', " +
+                    "meaning that this is not our enforced forward demo: " + e);
+        } catch (IllegalAccessException e) {
+            Log.e(TAG, "Could not set the value of enforceForwarding to false: " + e);
+        }
+
+        if (startParallelOrForwardingExecution(runMethod, true)) {
+            result = reduceResults(objClass, null, true);
+        } else {
+            Log.w(TAG, "The DS could not allocate a VM helper");
+        }
+
+        return result;
+    }
+
+    /**
+     *
+     * @param objClass The class of the object running the method.
+     * @param myResult The result calculated by this VM (used for the parallel case, not forwarding).
+     * @param isForwarding true if this is called by forwarding.
+     * @return The reduced result if this was called after parallel execution.<br>
+     *     Just the result of the helper VM if this was called after forwarding.
+     */
+    private Object reduceResults(Class<?> objClass, Object myResult, boolean isForwarding) {
+        Object reducedResult = null;
+        // Wait for all the VMs to finish execution before returning the result
+        waitForVMHelpersToBeReady();
+        Log.d(TAG, "All servers finished execution, send result back.");
+
+        // Kill the threads.
+        sendCommandToAllHelperThreads(-1);
+
+        if (!isForwarding) {
+            // put the result of the main vm as the first element of the array
+            synchronized (responsesFromServers) {
+                Array.set(responsesFromServers, 0, myResult);
+            }
+
+            // Call the reduce function implemented by the developer to combine the partial results.
+            try {
+                // Array of the returned type
+                Class<?> arrayReturnType =
+                        Array.newInstance(returnType, numberOfVMHelpers + 1).getClass();
+                Method runMethodReduce =
+                        objClass.getDeclaredMethod(methodName + "Reduce", arrayReturnType);
+                runMethodReduce.setAccessible(true);
+                Log.i(TAG, "Reducing the results using the method: " + runMethodReduce.getName());
+
+                reducedResult = runMethodReduce.invoke(objToExecute, new Object[]{responsesFromServers});
+                Log.i(TAG, "The reduced result: " + reducedResult);
+            } catch (Exception e) {
+                Log.e(TAG, "Impossible to reduce the result");
+                e.printStackTrace();
+            }
+
+            try {
+                dsOos.writeByte(RapidMessages.PARALLEL_END);
+                dsOos.flush();
+            } catch (Exception e) {
+                Log.e(TAG, "Exception while sending PARALLEL_END to the DS: " + e);
+            }
+        } else {
+            // There should be only one VM helper, since this is forwarding
+            try {
+                reducedResult = Array.get(responsesFromServers, 1);
+            } catch (Exception e) {
+                Log.e(TAG, "Could not get the result of the forwarding: " + e);
+            }
+
+            try {
+                dsOos.writeByte(RapidMessages.FORWARD_END);
+                dsOos.flush();
+            } catch (Exception e) {
+                Log.e(TAG, "Exception while sending FORWARD_END to the DS: " + e);
+            }
+        }
+
+        return reducedResult;
+    }
+
+    /**
+     *
+     * @param runMethod The method to be executed.
+     * @param isForwarding True if this is for forwarding, false if it is for parallel execution.
+     * @return true if the helper VMs were allocated.<br>
+     *     false otherwise.
+     */
+    private boolean startParallelOrForwardingExecution(Method runMethod, boolean isForwarding) {
+        // +1 since the vmHelpersId start from 1, so we use their IDs as index on the array.
+        pausedHelper = new Boolean[numberOfVMHelpers + 1];
+        for (int i = 1; i < numberOfVMHelpers + 1; i++) {
+            pausedHelper[i] = true;
+        }
+
+        boolean helperVMsAllocated = askDsForVMHelpers(isForwarding);
+        if (helperVMsAllocated) {
+            Log.i(TAG, "The VMs are successfully allocated.");
+            try {
+                if (isForwarding) {
+                    dsOos.writeByte(RapidMessages.FORWARD_START);
+                } else {
+                    dsOos.writeByte(RapidMessages.PARALLEL_START);
+                }
+                dsOos.flush();
+            } catch (Exception e) {
+                Log.e(TAG, "Exception while sending " +
+                        ((isForwarding) ? "FORWARD_START" : "PARALLEL_START") +
+                        " to the DS: " + e);
+            }
+
+            // Assign the IDs to the new vm helpers
+            Log.i(TAG, "The helper VMs:");
+            int vmHelperId = 1;
+            for (String vmHelperIp : vmHelperIPs) {
+                Log.i(TAG, vmHelperIp);
+                // Start the thread that should connect to the vm helper
+                (new VMHelperThread(vmHelperId++, vmHelperIp)).start();
+            }
+
+            returnType = runMethod.getReturnType(); // the return type of the offloaded method
+
+            // Allocate the space for the responses from the other VMs
+            responsesFromServers = Array.newInstance(returnType, numberOfVMHelpers + 1);
+
+            // Wait until all the threads are connected to the vm helpers
+            waitForVMHelpersToBeReady();
+
+            // Give the command to register the app first
+            sendCommandToAllHelperThreads(RapidMessages.AC_REGISTER_AS);
+
+            // Wait again for the threads to be ready
+            waitForVMHelpersToBeReady();
+
+            // And send a ping to all VMs just for testing
+            // sendCommandToAllHelperThreads(RapidMessages.PING);
+            // waitForVMHelpersToBeReady();
+
+            // Wake up the server helper threads and tell them to send the object to execute, the
+            // method, parameter types and parameter values
+
+            sendCommandToAllHelperThreads(RapidMessages.AC_OFFLOAD_REQ_AS);
+
+            return true;
+        } else {
+            Log.i(TAG, "Could not allocate other VMs, doing only my part of the job.");
+            return false;
         }
     }
 
@@ -780,8 +873,12 @@ public class AppHandler implements Runnable {
      * The DS will reply with the IP address of the VMs<br>
      * <p>
      * Launch the threads to connect to the other VMs.<br>
+     *
+     *     @return true if the DS could allocate the requested VMs.<br>
+     *         false otherwise.
      */
-    private boolean askDsForVMHelpers() {
+    private boolean askDsForVMHelpers(boolean isForwarding) {
+        numberOfVMHelpers = 1;
         try {
             Log.d(TAG, "Trying to connect to the DS - " + config.getDSIp() + ":" + config.getDSPort());
 
@@ -797,9 +894,14 @@ public class AppHandler implements Runnable {
                     + config.getDSPort());
 
             // Ask for helper VMs
-            dsOos.writeByte(RapidMessages.PARALLEL_REQ);
-            dsOos.writeLong(AccelerationServer.vmId);
-            dsOos.writeInt(numberOfVMHelpers);
+            if (isForwarding) {
+                dsOos.writeByte(RapidMessages.FORWARD_REQ);
+                dsOos.writeLong(AccelerationServer.vmId);
+            } else {
+                dsOos.writeByte(RapidMessages.PARALLEL_REQ);
+                dsOos.writeLong(AccelerationServer.vmId);
+                dsOos.writeInt(numberOfVMHelpers);
+            }
             dsOos.flush();
 
             vmHelperIPs = (ArrayList<String>) dsOis.readObject();
@@ -867,7 +969,7 @@ public class AppHandler implements Runnable {
 
                     synchronized (nrVMsReady) {
                         Log.d(TAG, "Server Helpers started so far: " + nrVMsReady.addAndGet(1));
-                        if (nrVMsReady.get() >= AppHandler.numberOfVMHelpers)
+                        if (nrVMsReady.get() >= numberOfVMHelpers)
                             nrVMsReady.notifyAll();
                     }
 

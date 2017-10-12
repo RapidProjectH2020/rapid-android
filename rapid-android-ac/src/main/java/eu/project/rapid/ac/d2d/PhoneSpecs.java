@@ -15,6 +15,7 @@
  *******************************************************************************/
 package eu.project.rapid.ac.d2d;
 
+import android.app.ActivityManager;
 import android.content.Context;
 import android.util.Log;
 
@@ -40,7 +41,7 @@ public class PhoneSpecs implements Serializable, Comparable<PhoneSpecs> {
     private String ip;
     private int nrCPUs; // number of CPU cores
     private int cpuFreqKHz; // CPU frequency in KHz
-    private int ramMB; // Memory in MB
+    private long ramMB; // Memory in MB
     private boolean hasGpu;
 
     private static PhoneSpecs phoneSpecs;
@@ -59,11 +60,15 @@ public class PhoneSpecs implements Serializable, Comparable<PhoneSpecs> {
         phoneId = String.valueOf(new Random().nextLong());
         nrCPUs = Utils.getDeviceNrCPUs();
         cpuFreqKHz = Utils.getDeviceCPUFreq();
+        ActivityManager am = (ActivityManager) context.getSystemService(Context.ACTIVITY_SERVICE);
+        ActivityManager.MemoryInfo memoryInfo = new ActivityManager.MemoryInfo();
+        am.getMemoryInfo(memoryInfo);
+        ramMB = memoryInfo.totalMem / (1024 * 1024);
+
         try {
             ip = Utils.getIpAddress().getHostAddress();
         } catch (Exception e) {
-            Log.w(TAG,
-                    "Error while getting the IP (most probably we are not connected to WiFi network): " + e);
+            Log.w(TAG, "Error while getting the IP (maybe NOT connected to WiFi network): " + e);
         }
     }
 
@@ -148,14 +153,14 @@ public class PhoneSpecs implements Serializable, Comparable<PhoneSpecs> {
     /**
      * @return the ramMB
      */
-    public int getRamMB() {
+    public long getRamMB() {
         return ramMB;
     }
 
     /**
      * @param ramMB the ramMB to set
      */
-    public void setRamMB(int ramMB) {
+    public void setRamMB(long ramMB) {
         this.ramMB = ramMB;
     }
 
@@ -208,7 +213,7 @@ public class PhoneSpecs implements Serializable, Comparable<PhoneSpecs> {
         } else if (this.cpuFreqKHz < otherPhone.cpuFreqKHz) {
             return -1;
         } else {
-            return this.ramMB - otherPhone.ramMB;
+            return (int) (this.ramMB - otherPhone.ramMB);
         }
     }
 

@@ -489,11 +489,21 @@ public class NetworkProfiler {
     }
 
     public int getWiFiRxPacketRate(int i) {
-        return wifiRxPackets.get(i).intValue();
+        try {
+            return wifiRxPackets.get(i).intValue();
+        } catch (Exception e) {
+            Log.w(TAG, "Could not get WiFiRxPacketRate: " + e);
+            return 0;
+        }
     }
 
     public int getWiFiTxPacketRate(int i) {
-        return wifiTxPackets.get(i).intValue();
+        try {
+            return wifiTxPackets.get(i).intValue();
+        } catch (Exception e) {
+            Log.w(TAG, "Could not get WiFiTxPacketRate: " + e);
+            return 0;
+        }
     }
 
     public boolean noConnectivity() {
@@ -513,11 +523,23 @@ public class NetworkProfiler {
         if (threeGActiveState == null || threeGActiveState.size() <= i) {
             return 0;
         }
-        return threeGActiveState.get(i);
+        if (isIndexValid(threeGActiveState, i)) {
+            return threeGActiveState.get(i);
+        }
+        return 0;
     }
 
     public long getUplinkDataRate(int i) {
-        return wifiTxBytes.get(i);
+        if (isIndexValid(wifiTxBytes, i)) {
+            return wifiTxBytes.get(i);
+        } else {
+            Log.w(TAG, "Could not get WiFiTxBytes");
+            return 0;
+        }
+    }
+
+    private boolean isIndexValid(List l, int i) {
+        return l != null && i >= 0 && i < l.size();
     }
 
     /**

@@ -16,6 +16,8 @@
 package eu.project.rapid.ac.utils;
 
 import android.content.Context;
+import android.net.DhcpInfo;
+import android.net.wifi.WifiManager;
 import android.telephony.TelephonyManager;
 import android.util.Log;
 
@@ -373,6 +375,20 @@ public class Utils {
         return null;
     }
 
+    public static InetAddress getBroadcastAddress(WifiManager myWifiManager) throws IOException {
+        DhcpInfo myDhcpInfo = myWifiManager.getDhcpInfo();
+        if (myDhcpInfo == null) {
+            System.out.println("Could not get broadcast address");
+            return null;
+        }
+        int broadcast = (myDhcpInfo.ipAddress & myDhcpInfo.netmask)
+                | ~myDhcpInfo.netmask;
+        byte[] quads = new byte[4];
+        for (int k = 0; k < 4; k++)
+            quads[k] = (byte) ((broadcast >> k * 8) & 0xFF);
+        return InetAddress.getByAddress(quads);
+    }
+
     /**
      * An empty file will be created automatically on the clone by Acceleration-Server. The presence
      * or absence of this file can let the method know if it is running on the phone or on the clone.
@@ -385,7 +401,7 @@ public class Utils {
             File tempFile = new File(Constants.FILE_OFFLOADED);
             return tempFile.exists();
         } catch (Exception e) {
-            return true;
+            return false;
         }
     }
 
