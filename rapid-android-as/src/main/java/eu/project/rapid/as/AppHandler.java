@@ -117,8 +117,6 @@ public class AppHandler implements Runnable {
 
     // For parallelization
     private Socket dsSocket = null;
-    private OutputStream dsOs;
-    private InputStream dsIs;
     private ObjectOutputStream dsOos = null;
     private ObjectInputStream dsOis = null;
     private ArrayList<String> vmHelperIPs;
@@ -493,8 +491,6 @@ public class AppHandler implements Runnable {
      * @param objIn Dynamic object input stream for reading an arbitrary object (class loaded from a
      *              previously obtained dex file inside an apk)
      * @return result of executing the required method
-     * @throws IllegalArgumentException
-     * @throws SecurityException
      */
     private Object retrieveAndExecute(DynamicObjectInputStream objIn) {
         Long getObjectDuration = -1L;
@@ -884,8 +880,8 @@ public class AppHandler implements Runnable {
 
             // Connect to the directory service
             dsSocket = new Socket(config.getDSIp(), config.getDSPort());
-            dsOs = dsSocket.getOutputStream();
-            dsIs = dsSocket.getInputStream();
+            OutputStream dsOs = dsSocket.getOutputStream();
+            InputStream dsIs = dsSocket.getInputStream();
 
             dsOos = new ObjectOutputStream(dsOs);
             dsOis = new ObjectInputStream(dsIs);
