@@ -142,7 +142,6 @@ class DSE {
         int i = 0;
         Iterator<DBEntry> it = localResults.descendingIterator();
         while (it.hasNext()) {
-//        for (DBEntry e : localResults) {
             DBEntry e = it.next();
             meanDurLocal += e.getExecDuration();
             meanEnergyLocal += e.getExecEnergy();
@@ -169,12 +168,12 @@ class DSE {
         int[] remoteUlRates = new int[nrRemoteExec];
         int[] remoteDlRates = new int[nrRemoteExec];
         long[] remoteTimestamps = new long[nrRemoteExec];
-        i = 0;
         if (VERBOSE_LOG) {
             Log.i(TAG, "------------ The remote executions of the method:");
         }
         Iterator<DBEntry> itRemote = remoteResults.descendingIterator();
-//        for (DBEntry e : remoteResults) {
+
+        i = 0;
         while (itRemote.hasNext()) {
             DBEntry e = itRemote.next();
             remoteDurations[i] = e.getExecDuration();
@@ -193,38 +192,6 @@ class DSE {
             i++;
         }
         Log.i(TAG, "nrRemoteExec: " + nrRemoteExec);
-
-        // DECISION 2
-        int NR_TIMES_SWITCH_SIDES = 10;
-        int count = 0;
-        ExecLocation prevExecLocation = null;
-        for (DBEntry e : dbCache.getAllEntriesFilteredOn(methodName)) {
-            if (count < NR_TIMES_SWITCH_SIDES
-                    && (prevExecLocation == null || e.getExecLocation().equals(prevExecLocation))) {
-                prevExecLocation = e.getExecLocation();
-                count++;
-            } else {
-                break;
-            }
-        }
-
-        if (count == NR_TIMES_SWITCH_SIDES) {
-            if (prevExecLocation.equals(ExecLocation.REMOTE)) {
-                Log.i(TAG, "Decision 2: Too many remote executions in a row.");
-                return false;
-            } else if (prevExecLocation.equals(ExecLocation.LOCAL)) {
-                Log.i(TAG, "Decision 2: Too many local executions in a row.");
-                if (currUlRate > MIN_UL_RATE_OFFLOAD_1_TIME && currDlRate > MIN_DL_RATE_OFFLOAD_1_TIME) {
-                    Log.i(TAG, "Decision 2->1: No previous remote executions. Good connectivity.");
-                    return true;
-                } else {
-                    Log.i(TAG, "Decision 2->1: No previous remote executions. Bad connectivity.");
-                    return false;
-                }
-            } else {
-                Log.e(TAG, "Decision 2: This shouldn't happen, check the implementation.");
-            }
-        }
 
         // DECISION 3
         // Calculate two different mean values for the offloaded execution:
@@ -284,6 +251,37 @@ class DSE {
         // Log.d(TAG,
         // "meanEnergyRemote1: " + meanEnergyRemote1 + " meanEnergyRemote2: " + meanEnergyRemote2);
         Log.d(TAG, "  meanEnergyRemote: " + meanEnergyRemote);
+
+
+        // DECISION 2
+        int count = 0;
+        ExecLocation prevExecLocation = null;
+        for (DBEntry e : dbCache.getAllEntriesFilteredOn(methodName)) {
+            if (prevExecLocation == null || e.getExecLocation().equals(prevExecLocation)) {
+                prevExecLocation = e.getExecLocation();
+                count++;
+            } else {
+                break;
+            }
+        }
+
+        if (prevExecLocation.equals(ExecLocation.REMOTE) &&
+                count > 10 * (int)(meanDurLocal / meanDurRemote)) {
+            Log.i(TAG, "Decision 2: Too many remote executions in a row.");
+            return false;
+        } else if (prevExecLocation.equals(ExecLocation.LOCAL) &&
+                count > 10 * (int)(meanDurRemote / meanDurLocal)) {
+            Log.i(TAG, "Decision 2: Too many local executions in a row.");
+            if (currUlRate > MIN_UL_RATE_OFFLOAD_1_TIME && currDlRate > MIN_DL_RATE_OFFLOAD_1_TIME) {
+                Log.i(TAG, "Decision 2->1: No previous remote executions. Good connectivity.");
+                return true;
+            } else {
+                Log.i(TAG, "Decision 2->1: No previous remote executions. Bad connectivity.");
+                return false;
+            }
+        } else {
+            Log.e(TAG, "Decision 2: This shouldn't happen, check the implementation.");
+        }
 
         Log.i(TAG, "Decision 3.");
         Log.d(TAG, "Making a choice for low energy and fast execution");

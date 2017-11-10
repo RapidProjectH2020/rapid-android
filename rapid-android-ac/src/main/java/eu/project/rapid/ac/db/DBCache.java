@@ -125,7 +125,8 @@ public class DBCache {
      * @param execLocation
      * @return
      */
-    public Deque<DBEntry> getAllEntriesFilteredOn(String appName, String methodName, ExecLocation execLocation) {
+    public Deque<DBEntry> getAllEntriesFilteredOn(String appName, String methodName,
+                                                  ExecLocation execLocation) {
 
         assert dbMap != null;
 
@@ -155,8 +156,8 @@ public class DBCache {
      * @return
      */
     public Deque<DBEntry> getAllEntriesFilteredOn(String appName, String methodName,
-                                                  ExecLocation execLocation, String networkType, String networkSubtype) {
-
+                                                  ExecLocation execLocation,
+                                                  String networkType, String networkSubtype) {
         assert dbMap != null;
 
         Deque<DBEntry> tempList = new LinkedList<>();
@@ -190,10 +191,8 @@ public class DBCache {
     }
 
     /**
-     * Returns the number of entries in the DB cache, i.e. the number of different methods insterted
+     * @return Number of entries in the DB cache, i.e. the number of different methods insterted
      * in the DB.
-     *
-     * @return
      */
     public int size() {
         if (dbMap == null) {
@@ -204,9 +203,7 @@ public class DBCache {
     }
 
     /**
-     * Returns the number of total elements in the DB cache, i.e.: nrMethods * measurementsPerMethod.
-     *
-     * @return
+     * @return Number of total elements in the DB cache, i.e.: nrMethods * measurementsPerMethod.
      */
     public int nrElements() {
         return nrElements;

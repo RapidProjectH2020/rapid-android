@@ -832,7 +832,7 @@ public class DFE {
             } else if (execLocation.equals(ExecLocation.REMOTE)) {
                 Log.v(TAG, "Should run the method remotely...");
                 result = executeRemotely(task, os, ois, oos);
-                if (result instanceof InvocationTargetException) {
+                if (result instanceof InvocationTargetException || result instanceof Exception) {
                     // The remote execution throwed an exception, try to run the method locally.
                     Log.w(TAG, "The result was InvocationTargetException. Running the method locally...");
                     result = executeLocally(task);
@@ -982,15 +982,21 @@ public class DFE {
                 Long duration = System.nanoTime() - startTime;
                 Log.d(TAG, "REMOTE " + task.m.getName() + ": Actual Send-Receive duration - "
                         + duration / 1000000 + "ms");
+
                 // Collect execution statistics
-                profiler.stopAndLogExecutionInfoTracking(prepareDataDuration, mPureRemoteDuration);
+                if (result instanceof InvocationTargetException || result instanceof Exception) {
+                    profiler.stopAndDiscardExecutionInfoTracking();
+                } else {
+                    profiler.stopAndLogExecutionInfoTracking(prepareDataDuration, mPureRemoteDuration);
+                }
             } catch (Exception e) {
                 // No such host exists, execute locally
                 fallBackToLocalExecution("REMOTE ERROR: " + task.m.getName() + ": " + e);
                 e.printStackTrace();
                 profiler.stopAndDiscardExecutionInfoTracking();
                 closeConnection();
-                result = executeLocally(task);
+                return e;
+//                result = executeLocally(task);
                 // ConnectionRepair repair = new ConnectionRepair();
                 // repair.start();
             }
