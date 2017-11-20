@@ -680,14 +680,15 @@ public class NetworkProfiler {
             is = clientSocket.getInputStream();
             dis = new DataInputStream(is);
 
+            Log.i(TAG, "Connected to VM. Sending request for UL rate measurement");
             os.write(RapidMessages.UPLOAD_FILE);
 
             // This will throw an exception when the VM will close the socket after 3 seconds
+            Log.i(TAG, "UL rate measurement, waiting the VM to send the OK byte...");
             while (true) {
                 os.write(buffer);
                 is.read();
             }
-
         } catch (UnknownHostException e) {
             Log.w(TAG, "UnknownHostException while measuring upload rate: " + e);
         } catch (SocketException e) {

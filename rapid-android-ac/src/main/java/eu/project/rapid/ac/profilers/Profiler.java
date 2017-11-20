@@ -120,7 +120,8 @@ public class Profiler {
             try {
                 synchronized (this) {
                     if (logFileWriter == null) {
-                        File logFile = new File(Constants.LOG_FILE_NAME + lastLogRecord.appName + ".csv");
+                        File logFile = new File(Constants.LOG_FILE_NAME +
+                                lastLogRecord.appName + ".csv");
                         // Try creating new, if doesn't exist
                         boolean logFileCreated = logFile.createNewFile();
                         logFileWriter = new FileWriter(logFile, true);
@@ -133,7 +134,8 @@ public class Profiler {
                     logFileWriter.flush();
                 }
             } catch (IOException e) {
-                Log.w(TAG, "Not able to create the logFile " + Constants.LOG_FILE_NAME + ": " + e);
+                Log.w(TAG, "Not able to create the logFile " +
+                        Constants.LOG_FILE_NAME + lastLogRecord.appName + ".csv" + ": " + e);
             }
 
             updateDbCache();
