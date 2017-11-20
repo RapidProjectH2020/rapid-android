@@ -34,7 +34,8 @@ import java.util.Map;
 
 
 public final class Util {
-    private static final String TAG = "RapidUtils";
+    private static final String LOG_TAG = "UTILS";
+
     private final static char[] hexArray = "0123456789ABCDEF".toCharArray();
     private final static Map<Character, Integer> hexToDec = new HashMap<Character, Integer>();
 
@@ -114,6 +115,7 @@ public final class Util {
         public static final int DOUBLE = Double.SIZE / 8;
     }
 
+    /*
     public static class ExitCode {
 
         public static int exit_code = 1;
@@ -126,7 +128,7 @@ public final class Util {
             exit_code = exitCode;
         }
     }
-
+    */
 
     public static byte[] objectToByteArray(Object o) throws IOException {
         byte[] bytes = null;
@@ -199,7 +201,7 @@ public final class Util {
             MessageDigest md = MessageDigest.getInstance("SHA-256");
             hash = md.digest(s.getBytes());
         } catch (NoSuchAlgorithmException e) {
-            Log.e(TAG, "Algorithm not found while hashing string: " + e);
+            Log.e(LOG_TAG, "Algorithm not found while hashing string: " + e);
             // e.printStackTrace();
         }
 
@@ -316,7 +318,7 @@ public final class Util {
                 }
             }
         } catch (Exception e) {
-            Log.i(TAG, "Exception while getting IP address: " + e);
+            Log.i(LOG_TAG, "Exception while getting IP address: " + e);
         }
         return null;
     }
@@ -332,13 +334,13 @@ public final class Util {
             for (InterfaceAddress inetAddress : addresses) {
                 iAddr = inetAddress.getBroadcast();
             }
-            Log.d(TAG, "iAddr=" + iAddr);
+            Log.d(LOG_TAG, "iAddr=" + iAddr);
             return iAddr;
 
         } catch (SocketException e) {
 
             e.printStackTrace();
-            Log.d(TAG, "getBroadcast" + e.getMessage());
+            Log.d(LOG_TAG, "getBroadcast" + e.getMessage());
         }
         return null;
     }

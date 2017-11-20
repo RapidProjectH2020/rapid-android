@@ -2,39 +2,55 @@ package eu.project.rapid.gvirtus4a;
 
 import java.io.IOException;
 
+import eu.project.rapid.gvirtus4a.params.IntParam;
+import eu.project.rapid.gvirtus4a.params.StringParam;
+
 public class CudaRtFrontend {
+
+	private static final String LOG_TAG = "CUDA RUNTIME FRONTEND";
+	
+	private Frontend frontend;
 	
 	public CudaRtFrontend(String serverIpAddress ,  int port) {
 
-		Frontend.getFrontend(serverIpAddress, port);
+		frontend=Frontend.getFrontend(serverIpAddress, port);
 
 	}
 
+	/*
 	public int Execute(String routine) throws IOException {
 
 		int exit_code = Frontend.Execute(routine);
 		return exit_code;
 
 	}
+	*/
 
+	@Override
+	public void finalize() {
+		close();
+	}
+
+	public void close() {
+		frontend.close();
+		frontend=null;
+	}
 	/* CUDA RUNTIME DEVICE */
 	
-	public int cudaGetDeviceCount() throws IOException {
-
-		Buffer.clear();
-		Buffer.AddPointer(0);
+	public int cudaGetDeviceCount(IntParam result) throws IOException {
+		Buffer buffer=new Buffer();
+		buffer.AddPointer(0);
 		String outputbuffer = "";
-		int exit_c = Execute("cudaGetDeviceCount" );
-		Util.ExitCode.setExit_code(exit_c);
-		int sizeType = Frontend.in.readByte();
-		for (int i = 0; i < 7; i++)
-			Frontend.in.readByte();
+		int exit_c = frontend.Execute("cudaGetDeviceCount",buffer);
+		if (exit_c!=0) { return exit_c; }
+		int sizeType = frontend.readByte();
+		frontend.readBytes(7);
 		for (int i = 0; i < sizeType; i++) {
 			if (i == 0) {
-				byte bb = Frontend.in.readByte();
+				byte bb = frontend.readByte();
 				outputbuffer += Integer.toHexString(bb & 0xFF);
 			} else
-				Frontend.in.readByte();
+				frontend.readByte();
 		}
 		StringBuilder out2 = new StringBuilder();
 		if (outputbuffer.length() > 2) {
@@ -45,27 +61,30 @@ public class CudaRtFrontend {
 			outputbuffer = String.valueOf(Integer.parseInt(out2.toString(), 16));
 		}
 		System.out.println("Integer.valueOf(outputbuffer): " + Integer.valueOf(outputbuffer));
-		return Integer.valueOf(outputbuffer);
+		//count=Integer.valueOf(outputbuffer);
+		//count=new Integer(outputbuffer);
+		result.value=Integer.valueOf(outputbuffer);
+		return exit_c;
 	}
 
-	public int cudaDeviceCanAccessPeer( int device, int peers) throws IOException {
-		Buffer .clear();
-		Buffer.AddPointer(0);
-		Buffer.AddInt(device);
-		Buffer.AddInt(peers);
+	public int cudaDeviceCanAccessPeer( int device, int peers, IntParam result) throws IOException {
+		Buffer buffer=new Buffer();
+		buffer.AddPointer(0);
+		buffer.AddInt(device);
+		buffer.AddInt(peers);
 		String outputbuffer = "";
-		int exit_c =  Execute("cudaDeviceCanAccessPeer" );
+		int exit_c =  frontend.Execute("cudaDeviceCanAccessPeer",buffer );
 		//  ExecuteMultiThread("cudaDeviceCanAccessPeer",b, );
-		Util.ExitCode.setExit_code(exit_c);
-		int sizeType = Frontend.in.readByte();
-		for (int i = 0; i < 7; i++)
-			Frontend.in.readByte();
+		if (exit_c!=0) { return exit_c; }
+		int sizeType = frontend.readByte();
+		frontend.readBytes(7);
+		
 		for (int i = 0; i < sizeType; i++) {
 			if (i == 0) {
-				byte bb = Frontend.in.readByte();
+				byte bb = frontend.readByte();
 				outputbuffer += Integer.toHexString(bb & 0xFF);
 			} else
-				Frontend.in.readByte();
+				frontend.readByte();
 		}
 		StringBuilder out2 = new StringBuilder();
 		if (outputbuffer.length() > 2) {
@@ -75,26 +94,25 @@ public class CudaRtFrontend {
 			}
 			outputbuffer = String.valueOf(Integer.parseInt(out2.toString(), 16));
 		}
-		return Integer.valueOf(outputbuffer);
+		result.value=Integer.valueOf(outputbuffer);
+		return exit_c;
 	}
 
-	public int cudaDriverGetVersion() throws IOException {
-
-		Buffer .clear();
-		Buffer.AddPointer(0);
+	public int cudaDriverGetVersion(IntParam result) throws IOException {
+		Buffer buffer=new Buffer();
+		buffer.AddPointer(0);
 		String outputbuffer = "";
-		int exit_c =  Execute("cudaDriverGetVersion" );
+		int exit_c =  frontend.Execute("cudaDriverGetVersion",buffer );
 		//  ExecuteMultiThread("cudaDriverGetVersion",b, );
-		Util.ExitCode.setExit_code(exit_c);
-		int sizeType = Frontend.in.readByte();
-		for (int i = 0; i < 7; i++)
-			Frontend.in.readByte();
+		if (exit_c!=0) { return exit_c; }
+		int sizeType = frontend.readByte();
+		frontend.readBytes(7);
 		for (int i = 0; i < sizeType; i++) {
 			if (i == 0 || i == 1) {
-				byte bb = Frontend.in.readByte();
+				byte bb = frontend.readByte();
 				outputbuffer += Integer.toHexString(bb & 0xFF);
 			} else
-				Frontend.in.readByte();
+				frontend.readByte();
 		}
 
 		StringBuilder out2 = new StringBuilder();
@@ -105,26 +123,26 @@ public class CudaRtFrontend {
 			}
 			outputbuffer = String.valueOf(Integer.parseInt(out2.toString(), 16));
 		}
-		return Integer.valueOf(outputbuffer);
+		result.value=Integer.valueOf(outputbuffer);
+		return exit_c;
 	}
 
-	public int cudaRuntimeGetVersion() throws IOException {
+	public int cudaRuntimeGetVersion(IntParam result) throws IOException {
 
-		Buffer .clear();
-		Buffer.AddPointer(0);
+		Buffer buffer=new Buffer();
+		buffer.AddPointer(0);
 		String outputbuffer = "";
-		int exit_c =  Execute("cudaRuntimeGetVersion" );
+		int exit_c =  frontend.Execute("cudaRuntimeGetVersion",buffer );
 		//  ExecuteMultiThread("cudaRuntimeGetVersion",b, );
-		Util.ExitCode.setExit_code(exit_c);
-		int sizeType = Frontend.in.readByte();
-		for (int i = 0; i < 7; i++)
-			Frontend.in.readByte();
+		if (exit_c!=0) { return exit_c; }
+		int sizeType = frontend.readByte();
+		frontend.readBytes(7);
 		for (int i = 0; i < sizeType; i++) {
 			if (i == 0 || i == 1) {
-				byte bb = Frontend.in.readByte();
+				byte bb = frontend.readByte();
 				outputbuffer += Integer.toHexString(bb & 0xFF);
 			} else
-				Frontend.in.readByte();
+				frontend.readByte();
 		}
 		StringBuilder out2 = new StringBuilder();
 		if (outputbuffer.length() > 2) {
@@ -134,40 +152,36 @@ public class CudaRtFrontend {
 			}
 			outputbuffer = String.valueOf(Integer.parseInt(out2.toString(), 16));
 		}
-		return Integer.valueOf(outputbuffer);
+		result.value=Integer.valueOf(outputbuffer);
+		return exit_c;
 	}
 
 	public int cudaSetDevice(int device) throws IOException {
 
-		Buffer .clear();
-		Buffer.Add(device);
-		int exit_c =  Execute("cudaSetDevice" );
-		Util.ExitCode.setExit_code(exit_c);
+		Buffer buffer=new Buffer();
+		buffer.Add(device);
+		int exit_c =  frontend.Execute("cudaSetDevice" ,buffer);
+		if (exit_c!=0) { return exit_c; }
 		//  ExecuteMultiThread("cudaSetDevice",b, );
-		return 0;
+		return exit_c;
 	}
 
-	public String cudaGetErrorString(int error) throws IOException {
+	public int cudaGetErrorString(int error, StringParam result) throws IOException {
 
-		Buffer .clear();
-		Buffer.AddInt(error);
+		Buffer buffer=new Buffer();
+		buffer.AddInt(error);
 		String outbuffer = "";
 		StringBuilder output = new StringBuilder();
-		int exit_c =  Execute("cudaGetErrorString" );
-		Util.ExitCode.setExit_code(exit_c);
-		int sizeType = Frontend.in.readByte();
+		int exit_c =  frontend.Execute("cudaGetErrorString" ,buffer);
+		if (exit_c!=0) { return exit_c; }
+		int sizeType = frontend.readByte();
 		// System.out.print("sizeType " + sizeType);
 
-		for (int i = 0; i < 7; i++)
-			Frontend.in.readByte();
-		Frontend.in.readByte();
-		// System.out.print("sizeType " + sizeType);
-
-		for (int i = 0; i < 7; i++)
-			Frontend.in.readByte();
+		frontend.readBytes(15);
+		
 
 		for (int i = 0; i < sizeType; i++) {
-			byte bit = Frontend.in.readByte();
+			byte bit = frontend.readByte();
 			outbuffer += Integer.toHexString(bit);
 			// System.out.print(outbuffer.toString());
 		}
@@ -176,32 +190,31 @@ public class CudaRtFrontend {
 			output.append((char) Integer.parseInt(str, 16));
 
 		}
-		return output.toString();
+		result.value=output.toString();
+		return exit_c;
 
 	}
 
-	public void cudaDeviceReset() throws IOException {
-		Buffer .clear();
-		int exit_c =  Execute("cudaDeviceReset" );
-		Util.ExitCode.setExit_code(exit_c);
-
+	public int cudaDeviceReset() throws IOException {
+		Buffer buffer=new Buffer();
+		int exit_c =  frontend.Execute("cudaDeviceReset" ,buffer);
+		if (exit_c!=0) { return exit_c; }
+		return exit_c;
 	}
 
-	public CudaDeviceProp cudaGetDeviceProperties( int device) throws IOException {
-		Buffer.clear();
+	public int cudaGetDeviceProperties( int device, CudaDeviceProp cudaDeviceProp) throws IOException {
+		Buffer buffer=new Buffer();
 		String outbuffer = "";
 		StringBuilder output = new StringBuilder();
-		CudaDeviceProp struct = new CudaDeviceProp();
+		
 
-		Buffer.AddStruct(struct);
-		Buffer.AddInt(device);
-		int exit_c =  Execute("cudaGetDeviceProperties" );
-		Util.ExitCode.setExit_code(exit_c);
-		for (int i = 0; i < 8; i++) {
-			Frontend.in.readByte();
-		}
+		buffer.AddStruct(cudaDeviceProp.getStruct());
+		buffer.AddInt(device);
+		int exit_c =  frontend.Execute("cudaGetDeviceProperties",buffer );
+		if (exit_c!=0) { return exit_c; }
+		frontend.readBytes(8);
 		for (int i = 0; i < 256; i++) {
-			byte bit = Frontend.in.readByte();
+			byte bit = frontend.readByte();
 
 			outbuffer += Integer.toHexString(bit);
 		}
@@ -209,102 +222,102 @@ public class CudaRtFrontend {
 			String str = outbuffer.substring(i, i + 2);
 			output.append((char) Integer.parseInt(str, 16));
 		}
-		struct.setName(output.toString());
-		struct.setTotalGlobalMem(Frontend.Transmitter.getLong());
-		struct.setSharedMemPerBlock(Frontend.Transmitter.getLong());
-		struct.setRegsPerBlock(Frontend.Transmitter.getInt());
-		
-		struct.setWarpSize(Frontend.Transmitter.getInt());
-		struct.setMemPitch(Frontend.Transmitter.getLong());
-		struct.setMaxThreadsPerBlock(Frontend.Transmitter.getInt());
-		struct.setMaxThreadsDim(Frontend.Transmitter.getInt(),0);
-		
-		
-		struct.setMaxThreadsDim(Frontend.Transmitter.getInt(),1);
-		
-		struct.setMaxThreadsDim(Frontend.Transmitter.getInt(), 2);
-		struct.setMaxGridSize(Frontend.Transmitter.getInt(),0);
-		struct.setMaxGridSize(Frontend.Transmitter.getInt(),1);
-		struct.setMaxGridSize(Frontend.Transmitter.getInt(),2);
-		struct.setClockRate(Frontend.Transmitter.getInt()); // check
-		struct.setTotalConstMem(Frontend.Transmitter.getLong());
-		struct.setMajor(Frontend.Transmitter.getInt());
-		struct.setMinor(Frontend.Transmitter.getInt());
-		struct.setTextureAlignment(Frontend.Transmitter.getLong());
-		struct.setTexturePitchAlignment(Frontend.Transmitter.getLong()); // check
-		struct.setDeviceOverlap(Frontend.Transmitter.getInt());
-		struct.setMultiProcessorCount(Frontend.Transmitter.getInt());
-		struct.setKernelExecTimeoutEnabled(Frontend.Transmitter.getInt());
-		struct.setIntegrated(Frontend.Transmitter.getInt());
-		struct.setCanMapHostMemory(Frontend.Transmitter.getInt());
-		struct.setComputeMode(Frontend.Transmitter.getInt());
-		struct.setMaxTexture1D(Frontend.Transmitter.getInt());
-		struct.setMaxTexture1DMipmap(Frontend.Transmitter.getInt());
-		struct.setMaxTexture1DLinear(Frontend.Transmitter.getInt()); // check
-		struct.setMaxTexture2D(Frontend.Transmitter.getInt(),0);
-		struct.setMaxTexture2D(Frontend.Transmitter.getInt(),1);
-		
-		struct.setMaxTexture2DMipmap(Frontend.Transmitter.getInt(),0);
-		struct.setMaxTexture2DMipmap(Frontend.Transmitter.getInt(),1);
-		
-		struct.setMaxTexture2DLinear(Frontend.Transmitter.getInt(),0);
-		struct.setMaxTexture2DLinear(Frontend.Transmitter.getInt(),1);
-		struct.setMaxTexture2DLinear(Frontend.Transmitter.getInt(),2);
-		
-		struct.setMaxTexture2DGather(Frontend.Transmitter.getInt(),0);
-		struct.setMaxTexture2DGather(Frontend.Transmitter.getInt(),1);
-		
-		struct.setMaxTexture3D(Frontend.Transmitter.getInt(),0);
-		struct.setMaxTexture3D(Frontend.Transmitter.getInt(),1);
-		struct.setMaxTexture3D(Frontend.Transmitter.getInt(),2);
-		
-		struct.setMaxTexture3DAlt(Frontend.Transmitter.getInt(),0);
-		struct.setMaxTexture3DAlt(Frontend.Transmitter.getInt(),1);
-		struct.setMaxTexture3DAlt(Frontend.Transmitter.getInt(),2);
-		struct.setMaxTextureCubemap(Frontend.Transmitter.getInt());
-		struct.setMaxTexture1DLayered(Frontend.Transmitter.getInt(),0);
-		struct.setMaxTexture1DLayered(Frontend.Transmitter.getInt(),1);
-		struct.setMaxTexture2DLayered(Frontend.Transmitter.getInt(),0);
-		struct.setMaxTexture2DLayered(Frontend.Transmitter.getInt(),1);
-		struct.setMaxTexture2DLayered(Frontend.Transmitter.getInt(),2);
-		struct.setMaxTextureCubemapLayered(Frontend.Transmitter.getInt(),0);
-		struct.setMaxTextureCubemapLayered(Frontend.Transmitter.getInt(),1);
-		struct.setMaxSurface1D(Frontend.Transmitter.getInt());
-		struct.setMaxSurface2D(Frontend.Transmitter.getInt(),0);
-		struct.setMaxSurface2D(Frontend.Transmitter.getInt(),1);
-		struct.setMaxSurface3D(Frontend.Transmitter.getInt(),0);
-		struct.setMaxSurface3D(Frontend.Transmitter.getInt(),1);
-		struct.setMaxSurface3D(Frontend.Transmitter.getInt(),2);
-		struct.setMaxSurface1DLayered(Frontend.Transmitter.getInt(),0);
-		struct.setMaxSurface1DLayered(Frontend.Transmitter.getInt(),1);
-		struct.setMaxSurface2DLayered(Frontend.Transmitter.getInt(),0);
-		struct.setMaxSurface2DLayered(Frontend.Transmitter.getInt(),1);
-		struct.setMaxSurface2DLayered(Frontend.Transmitter.getInt(),2);
-		struct.setMaxSurfaceCubemap(Frontend.Transmitter.getInt());
-		struct.setMaxSurfaceCubemapLayered(Frontend.Transmitter.getInt(),0);
-		struct.setMaxSurfaceCubemapLayered(Frontend.Transmitter.getInt(),1);
-		struct.setSurfaceAlignment(Frontend.Transmitter.getLong());
-		struct.setConcurrentKernels(Frontend.Transmitter.getInt());
-		struct.setECCEnabled(Frontend.Transmitter.getInt());
-		struct.setPciBusID(Frontend.Transmitter.getInt());
-		struct.setPciDeviceID(Frontend.Transmitter.getInt());
-		struct.setPciDomainID(Frontend.Transmitter.getInt());
-		struct.setTccDriver(Frontend.Transmitter.getInt());
-		struct.setAsyncEngineCount(Frontend.Transmitter.getInt());
-		struct.setUnifiedAddressing(Frontend.Transmitter.getInt());
-		struct.setMemoryClockRate(Frontend.Transmitter.getInt());
-		struct.setMemoryBusWidth(Frontend.Transmitter.getInt());
-		struct.setL2CacheSize(Frontend.Transmitter.getInt());
-		struct.setMaxThreadsPerMultiProcessor(Frontend.Transmitter.getInt());
-		struct.setStreamPrioritiesSupported(Frontend.Transmitter.getInt());
-		struct.setGlobalL1CacheSupported(Frontend.Transmitter.getInt());
-		struct.setLocalL1CacheSupported(Frontend.Transmitter.getInt());
-		struct.setSharedMemPerMultiprocessor(Frontend.Transmitter.getLong());
-		struct.setRegsPerMultiprocessor(Frontend.Transmitter.getInt());
-		struct.setManagedMemory(Frontend.Transmitter.getInt());
-		struct.setIsMultiGpuBoard(Frontend.Transmitter.getInt());
-		struct.setMultiGpuBoardGroupID(Frontend.Transmitter.getInt());
-		Frontend.Transmitter.getInt(); // è in più da capire il perchè
-		return struct;
+		cudaDeviceProp.setName(output.toString());
+		cudaDeviceProp.setTotalGlobalMem(frontend.getLong());
+		cudaDeviceProp.setSharedMemPerBlock(frontend.getLong());
+		cudaDeviceProp.setRegsPerBlock(frontend.getInt());
+
+		cudaDeviceProp.setWarpSize(frontend.getInt());
+		cudaDeviceProp.setMemPitch(frontend.getLong());
+		cudaDeviceProp.setMaxThreadsPerBlock(frontend.getInt());
+		cudaDeviceProp.setMaxThreadsDim(frontend.getInt(),0);
+
+
+		cudaDeviceProp.setMaxThreadsDim(frontend.getInt(),1);
+
+		cudaDeviceProp.setMaxThreadsDim(frontend.getInt(), 2);
+		cudaDeviceProp.setMaxGridSize(frontend.getInt(),0);
+		cudaDeviceProp.setMaxGridSize(frontend.getInt(),1);
+		cudaDeviceProp.setMaxGridSize(frontend.getInt(),2);
+		cudaDeviceProp.setClockRate(frontend.getInt()); // check
+		cudaDeviceProp.setTotalConstMem(frontend.getLong());
+		cudaDeviceProp.setMajor(frontend.getInt());
+		cudaDeviceProp.setMinor(frontend.getInt());
+		cudaDeviceProp.setTextureAlignment(frontend.getLong());
+		cudaDeviceProp.setTexturePitchAlignment(frontend.getLong()); // check
+		cudaDeviceProp.setDeviceOverlap(frontend.getInt());
+		cudaDeviceProp.setMultiProcessorCount(frontend.getInt());
+		cudaDeviceProp.setKernelExecTimeoutEnabled(frontend.getInt());
+		cudaDeviceProp.setIntegrated(frontend.getInt());
+		cudaDeviceProp.setCanMapHostMemory(frontend.getInt());
+		cudaDeviceProp.setComputeMode(frontend.getInt());
+		cudaDeviceProp.setMaxTexture1D(frontend.getInt());
+		cudaDeviceProp.setMaxTexture1DMipmap(frontend.getInt());
+		cudaDeviceProp.setMaxTexture1DLinear(frontend.getInt()); // check
+		cudaDeviceProp.setMaxTexture2D(frontend.getInt(),0);
+		cudaDeviceProp.setMaxTexture2D(frontend.getInt(),1);
+
+		cudaDeviceProp.setMaxTexture2DMipmap(frontend.getInt(),0);
+		cudaDeviceProp.setMaxTexture2DMipmap(frontend.getInt(),1);
+
+		cudaDeviceProp.setMaxTexture2DLinear(frontend.getInt(),0);
+		cudaDeviceProp.setMaxTexture2DLinear(frontend.getInt(),1);
+		cudaDeviceProp.setMaxTexture2DLinear(frontend.getInt(),2);
+
+		cudaDeviceProp.setMaxTexture2DGather(frontend.getInt(),0);
+		cudaDeviceProp.setMaxTexture2DGather(frontend.getInt(),1);
+
+		cudaDeviceProp.setMaxTexture3D(frontend.getInt(),0);
+		cudaDeviceProp.setMaxTexture3D(frontend.getInt(),1);
+		cudaDeviceProp.setMaxTexture3D(frontend.getInt(),2);
+
+		cudaDeviceProp.setMaxTexture3DAlt(frontend.getInt(),0);
+		cudaDeviceProp.setMaxTexture3DAlt(frontend.getInt(),1);
+		cudaDeviceProp.setMaxTexture3DAlt(frontend.getInt(),2);
+		cudaDeviceProp.setMaxTextureCubemap(frontend.getInt());
+		cudaDeviceProp.setMaxTexture1DLayered(frontend.getInt(),0);
+		cudaDeviceProp.setMaxTexture1DLayered(frontend.getInt(),1);
+		cudaDeviceProp.setMaxTexture2DLayered(frontend.getInt(),0);
+		cudaDeviceProp.setMaxTexture2DLayered(frontend.getInt(),1);
+		cudaDeviceProp.setMaxTexture2DLayered(frontend.getInt(),2);
+		cudaDeviceProp.setMaxTextureCubemapLayered(frontend.getInt(),0);
+		cudaDeviceProp.setMaxTextureCubemapLayered(frontend.getInt(),1);
+		cudaDeviceProp.setMaxSurface1D(frontend.getInt());
+		cudaDeviceProp.setMaxSurface2D(frontend.getInt(),0);
+		cudaDeviceProp.setMaxSurface2D(frontend.getInt(),1);
+		cudaDeviceProp.setMaxSurface3D(frontend.getInt(),0);
+		cudaDeviceProp.setMaxSurface3D(frontend.getInt(),1);
+		cudaDeviceProp.setMaxSurface3D(frontend.getInt(),2);
+		cudaDeviceProp.setMaxSurface1DLayered(frontend.getInt(),0);
+		cudaDeviceProp.setMaxSurface1DLayered(frontend.getInt(),1);
+		cudaDeviceProp.setMaxSurface2DLayered(frontend.getInt(),0);
+		cudaDeviceProp.setMaxSurface2DLayered(frontend.getInt(),1);
+		cudaDeviceProp.setMaxSurface2DLayered(frontend.getInt(),2);
+		cudaDeviceProp.setMaxSurfaceCubemap(frontend.getInt());
+		cudaDeviceProp.setMaxSurfaceCubemapLayered(frontend.getInt(),0);
+		cudaDeviceProp.setMaxSurfaceCubemapLayered(frontend.getInt(),1);
+		cudaDeviceProp.setSurfaceAlignment(frontend.getLong());
+		cudaDeviceProp.setConcurrentKernels(frontend.getInt());
+		cudaDeviceProp.setECCEnabled(frontend.getInt());
+		cudaDeviceProp.setPciBusID(frontend.getInt());
+		cudaDeviceProp.setPciDeviceID(frontend.getInt());
+		cudaDeviceProp.setPciDomainID(frontend.getInt());
+		cudaDeviceProp.setTccDriver(frontend.getInt());
+		cudaDeviceProp.setAsyncEngineCount(frontend.getInt());
+		cudaDeviceProp.setUnifiedAddressing(frontend.getInt());
+		cudaDeviceProp.setMemoryClockRate(frontend.getInt());
+		cudaDeviceProp.setMemoryBusWidth(frontend.getInt());
+		cudaDeviceProp.setL2CacheSize(frontend.getInt());
+		cudaDeviceProp.setMaxThreadsPerMultiProcessor(frontend.getInt());
+		cudaDeviceProp.setStreamPrioritiesSupported(frontend.getInt());
+		cudaDeviceProp.setGlobalL1CacheSupported(frontend.getInt());
+		cudaDeviceProp.setLocalL1CacheSupported(frontend.getInt());
+		cudaDeviceProp.setSharedMemPerMultiprocessor(frontend.getLong());
+		cudaDeviceProp.setRegsPerMultiprocessor(frontend.getInt());
+		cudaDeviceProp.setManagedMemory(frontend.getInt());
+		cudaDeviceProp.setIsMultiGpuBoard(frontend.getInt());
+		cudaDeviceProp.setMultiGpuBoardGroupID(frontend.getInt());
+		frontend.getInt(); // è in più da capire il perchè
+		return exit_c;
 	}
 }

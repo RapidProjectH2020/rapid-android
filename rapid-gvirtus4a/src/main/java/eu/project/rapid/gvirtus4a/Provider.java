@@ -3,15 +3,18 @@ package eu.project.rapid.gvirtus4a;
 import java.io.IOException;
 import java.util.Vector;
 
+import eu.project.rapid.gvirtus4a.params.IntParam;
+
 /**
  * Created by raffaelemontella on 26/04/2017.
  */
 
 public class Provider {
+    private static final String LOG_TAG = "PROVIDER";
     private String host;
     private int port;
-    private int driverVersion;
-    private int runtimeVersion;
+    private Integer driverVersion;
+    private Integer runtimeVersion;
 
     private Vector<CudaDeviceProp> properties=new Vector<CudaDeviceProp>();
 
@@ -31,19 +34,28 @@ public class Provider {
 
     public void deviceQuery() throws IOException {
 
-        CudaRtFrontend runtime = new CudaRtFrontend(host, port);
-        int deviceCount = runtime.cudaGetDeviceCount();
-        if (Util.ExitCode.getExit_code() != 0) {
+        CudaRtFrontend cudaRtFrontend = new CudaRtFrontend(host, port);
+        IntParam intParam=new IntParam();
+        int exitCode = cudaRtFrontend.cudaGetDeviceCount(intParam);
+        if (exitCode != 0) {
             return;
         }
+        int deviceCount=intParam.value;
 
-        driverVersion = runtime.cudaDriverGetVersion();
-        runtimeVersion = runtime.cudaRuntimeGetVersion();
+        cudaRtFrontend.cudaDriverGetVersion(intParam);
+        driverVersion=intParam.value;
+
+        cudaRtFrontend.cudaRuntimeGetVersion(intParam);
+        runtimeVersion=intParam.value;
 
         for (int i = 0; i < deviceCount; i++) {
-            runtime.cudaSetDevice(i);
-            CudaDeviceProp deviceProp = runtime.cudaGetDeviceProperties(i);
-            properties.add(deviceProp);
+            cudaRtFrontend.cudaSetDevice(i);
+            CudaDeviceProp deviceProp=new CudaDeviceProp();
+            exitCode=cudaRtFrontend.cudaGetDeviceProperties(i,deviceProp);
+            if (exitCode==0) {
+                properties.add(deviceProp);
+            }
         }
+        cudaRtFrontend.close();
     }
 }

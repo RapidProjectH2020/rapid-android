@@ -7,6 +7,7 @@ import java.util.Vector;
  */
 
 public class Providers {
+    private static final String LOG_TAG = "PROVIDERS";
     private Vector<Provider> providers;
     private static Providers instance;
 

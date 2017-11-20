@@ -4,46 +4,55 @@ import android.util.Log;
 
 import java.io.IOException;
 
+import eu.project.rapid.gvirtus4a.params.FloatArrayParam;
+import eu.project.rapid.gvirtus4a.params.IntParam;
+import eu.project.rapid.gvirtus4a.params.LongParam;
+import eu.project.rapid.gvirtus4a.params.StringParam;
+
 public class CudaDrFrontend {
 
-    private static final String TAG = CudaDrFrontend.class.getName();
+    private static final String LOG_TAG = "CUDA DRIVER FRONTEND";
+    private Frontend frontend;
 
     public CudaDrFrontend() {
         Providers providers = Providers.getInstance();
         Provider provider = providers.getBest();
-        Frontend.getFrontend(provider.getHost(), provider.getPort());
+        frontend=Frontend.getFrontend(provider.getHost(), provider.getPort());
     }
 
     public CudaDrFrontend(String serverIpAddress, int port) {
-
-        Frontend.getFrontend(serverIpAddress, port);
-
+        frontend=Frontend.getFrontend(serverIpAddress, port);
     }
 
+    public void close() {
+        frontend.close();
+    }
+
+    /*
     public int Execute(String routine) throws IOException {
 
-        int exit_code = Frontend.Execute(routine);
+        int exit_code = frontend.Execute(routine);
         return exit_code;
     }
+    */
 
     /* CUDA DRIVER DEVICE */
-    public int cuDeviceGet(int devID) throws IOException {
-
-        Buffer.clear();
-        Buffer.AddPointer(0);
-        Buffer.AddInt(devID);
+    public int cuDeviceGet(int devID, IntParam result) throws IOException {
+        Buffer buffer=new Buffer();
+        buffer.AddPointer(0);
+        buffer.AddInt(devID);
         String outputbuffer = "";
-        int exit_c = Execute("cuDeviceGet");
-        Util.ExitCode.setExit_code(exit_c);
-        int sizeType = Frontend.in.readByte();
-        for (int i = 0; i < 7; i++)
-            Frontend.in.readByte();
+        int exit_c = frontend.Execute("cuDeviceGet",buffer);
+        if (exit_c!=0) { return exit_c; }
+        
+        int sizeType = frontend.readByte();
+        frontend.readBytes(7);
         for (int i = 0; i < sizeType; i++) {
             if (i == 0 || i == 1) {
-                byte bb = Frontend.in.readByte();
+                byte bb = frontend.readByte();
                 outputbuffer += Integer.toHexString(bb & 0xFF);
             } else
-                Frontend.in.readByte();
+                frontend.readByte();
         }
         StringBuilder out2 = new StringBuilder();
         if (outputbuffer.length() > 2) {
@@ -53,36 +62,30 @@ public class CudaDrFrontend {
             }
             outputbuffer = String.valueOf(Integer.parseInt(out2.toString(), 16));
         }
-        return Integer.valueOf(outputbuffer);
+        result.value=Integer.valueOf(outputbuffer);
+        return exit_c;
     }
 
-    public String cuDeviceGetName(int len, int dev) throws IOException {
-
-        Buffer.clear();
-        Buffer.AddByte(1);
+    public int cuDeviceGetName(int len, int dev, StringParam name) throws IOException {
+        Buffer buffer=new Buffer();
+        buffer.AddByte(1);
         for (int i = 0; i < 8; i++)
-            Buffer.AddByte(0);
-        Buffer.AddByte(1);
+            buffer.AddByte(0);
+        buffer.AddByte(1);
         for (int i = 0; i < 7; i++)
-            Buffer.AddByte(0);
-        Buffer.AddInt(len);
-        Buffer.AddInt(dev);
+            buffer.AddByte(0);
+        buffer.AddInt(len);
+        buffer.AddInt(dev);
 
         String outbuffer = "";
         StringBuilder output = new StringBuilder();
-        int exit_c = Execute("cuDeviceGetName");
-        Util.ExitCode.setExit_code(exit_c);
-        int sizeType = Frontend.in.readByte();
-
-        for (int i = 0; i < 7; i++)
-            Frontend.in.readByte();
-        Frontend.in.readByte();
-
-        for (int i = 0; i < 7; i++)
-            Frontend.in.readByte();
+        int exit_c = frontend.Execute("cuDeviceGetName",buffer);
+        if (exit_c!=0) { return exit_c; }
+        int sizeType = frontend.readByte();
+        frontend.readBytes(15);
 
         for (int i = 0; i < sizeType; i++) {
-            byte bit = Frontend.in.readByte();
+            byte bit = frontend.readByte();
             outbuffer += Integer.toHexString(bit);
         }
         for (int i = 0; i < outbuffer.length() - 1; i += 2) {
@@ -90,26 +93,25 @@ public class CudaDrFrontend {
             output.append((char) Integer.parseInt(str, 16));
 
         }
-        return output.toString();
+        name.value=output.toString();
+        return exit_c;
 
     }
 
-    public int cuDeviceGetCount() throws IOException {
-
-        Buffer.clear();
-        Buffer.AddPointer(0);
+    public int cuDeviceGetCount(IntParam result) throws IOException {
+        Buffer buffer=new Buffer();
+        buffer.AddPointer(0);
         String outputbuffer = "";
-        int exit_c = Execute("cuDeviceGetCount");
-        Util.ExitCode.setExit_code(exit_c);
-        int sizeType = Frontend.in.readByte();
-        for (int i = 0; i < 7; i++)
-            Frontend.in.readByte();
+        int exit_c = frontend.Execute("cuDeviceGetCount",buffer);
+        if (exit_c!=0) { return exit_c; }
+        int sizeType = frontend.readByte();
+        frontend.readBytes(7);
         for (int i = 0; i < sizeType; i++) {
             if (i == 0) {
-                byte bb = Frontend.in.readByte();
+                byte bb = frontend.readByte();
                 outputbuffer += Integer.toHexString(bb & 0xFF);
             } else
-                Frontend.in.readByte();
+                frontend.readByte();
         }
         StringBuilder out2 = new StringBuilder();
         if (outputbuffer.length() > 2) {
@@ -120,28 +122,28 @@ public class CudaDrFrontend {
             outputbuffer = String.valueOf(Integer.parseInt(out2.toString(), 16));
         }
 
-        return Integer.valueOf(outputbuffer);
+        result.value=Integer.valueOf(outputbuffer);
+        return exit_c;
 
     }
 
-    public int[] cuDeviceComputeCapability(int device) throws IOException {
-
-        Buffer.clear();
-        Buffer.AddPointer(0);
-        Buffer.AddPointer(0);
-        Buffer.AddInt(device);
+    public int cuDeviceComputeCapability(int device, IntParam[] results) throws IOException {
+        Buffer buffer=new Buffer();
+        buffer.AddPointer(0);
+        buffer.AddPointer(0);
+        buffer.AddInt(device);
         String outputbuffer = "";
-        int exit_c = Execute("cuDeviceComputeCapability");
-        Util.ExitCode.setExit_code(exit_c);
-        int sizeType = Frontend.in.readByte();
-        for (int i = 0; i < 7; i++)
-            Frontend.in.readByte();
+        int exit_c = frontend.Execute("cuDeviceComputeCapability",buffer);
+        if (exit_c!=0) { return exit_c; }
+        int sizeType = frontend.readByte();
+        frontend.readBytes(7);
+
         for (int i = 0; i < sizeType; i++) {
             if (i == 0) {
-                byte bb = Frontend.in.readByte();
+                byte bb = frontend.readByte();
                 outputbuffer += Integer.toHexString(bb & 0xFF);
             } else
-                Frontend.in.readByte();
+                frontend.readByte();
         }
         StringBuilder out2 = new StringBuilder();
         if (outputbuffer.length() > 2) {
@@ -152,19 +154,18 @@ public class CudaDrFrontend {
             outputbuffer = String.valueOf(Integer.parseInt(out2.toString(), 16));
         }
 
-        int[] majorminor = new int[2];
 
-        majorminor[0] = Integer.valueOf(outputbuffer);
+        results[0].value = Integer.valueOf(outputbuffer);
         outputbuffer = "";
-        sizeType = Frontend.in.readByte();
-        for (int i = 0; i < 7; i++)
-            Frontend.in.readByte();
+        sizeType = frontend.readByte();
+        frontend.readBytes(7);
+
         for (int i = 0; i < sizeType; i++) {
             if (i == 0) {
-                byte bb = Frontend.in.readByte();
+                byte bb = frontend.readByte();
                 outputbuffer += Integer.toHexString(bb & 0xFF);
             } else
-                Frontend.in.readByte();
+                frontend.readByte();
         }
         StringBuilder out3 = new StringBuilder();
         if (outputbuffer.length() > 2) {
@@ -174,29 +175,28 @@ public class CudaDrFrontend {
             }
             outputbuffer = String.valueOf(Integer.parseInt(out3.toString(), 16));
         }
-        majorminor[1] = Integer.valueOf(outputbuffer);
-        return majorminor;
+        results[1].value = Integer.valueOf(outputbuffer);
+
+        return exit_c;
 
     }
 
-    public int cuDeviceGetAttribute(int attribute, int device) throws IOException {
-
-        Buffer.clear();
-        Buffer.AddPointer(0);
-        Buffer.AddInt(attribute);
-        Buffer.AddInt(device);
+    public int cuDeviceGetAttribute(int attribute, int device, IntParam result) throws IOException {
+        Buffer buffer=new Buffer();
+        buffer.AddPointer(0);
+        buffer.AddInt(attribute);
+        buffer.AddInt(device);
         String outputbuffer = "";
-        int exit_c = Execute("cuDeviceGetAttribute");
-        Util.ExitCode.setExit_code(exit_c);
-        int sizeType = Frontend.in.readByte();
-        for (int i = 0; i < 7; i++)
-            Frontend.in.readByte();
+        int exit_c = frontend.Execute("cuDeviceGetAttribute",buffer);
+        if (exit_c!=0) { return exit_c; }
+        int sizeType = frontend.readByte();
+        frontend.readBytes(7);
         for (int i = 0; i < sizeType; i++) {
             if (i == 0) {
-                byte bb = Frontend.in.readByte();
+                byte bb = frontend.readByte();
                 outputbuffer += Integer.toHexString(bb & 0xFF);
             } else
-                Frontend.in.readByte();
+                frontend.readByte();
         }
         StringBuilder out2 = new StringBuilder();
         if (outputbuffer.length() > 2) {
@@ -206,322 +206,319 @@ public class CudaDrFrontend {
             }
             outputbuffer = String.valueOf(Integer.parseInt(out2.toString(), 16));
         }
-
-        return Integer.valueOf(outputbuffer);
+        result.value=Integer.valueOf(outputbuffer);
+        return exit_c;
 
     }
 
-    public long cuDeviceTotalMem(int dev) throws IOException {
-
-        Buffer.clear();
-        Buffer.AddByte(8);
+    public int cuDeviceTotalMem(int dev, LongParam result) throws IOException {
+        Buffer buffer=new Buffer();
+        buffer.AddByte(8);
         for (int i = 0; i < 16; i++)
-            Buffer.AddByte(0);
-        Buffer.AddInt(dev);
-        int exit_c = Execute("cuDeviceTotalMem");
-        Util.ExitCode.setExit_code(exit_c);
-        for (int i = 0; i < 8; i++)
-            Frontend.in.readByte();
-        long x = Frontend.Transmitter.getLong();
-        return x;
+            buffer.AddByte(0);
+        buffer.AddInt(dev);
+        int exit_c = frontend.Execute("cuDeviceTotalMem",buffer);
+        if (exit_c!=0) { return exit_c; }
+        frontend.readBytes(8);
+        result.value = frontend.getLong();
+        return exit_c;
 
     }
 
 	/* CUDA DRIVER MEMORY */
 
-    public String cuMemAlloc(long size) throws IOException {
-
-        Buffer.clear();
+    public int cuMemAlloc(long size, StringParam pointer) throws IOException {
+        Buffer buffer=new Buffer();
         byte[] bits = Util.longToByteArray(size);
         for (int i = 0; i < bits.length; i++) {
-            Buffer.AddByte(bits[i] & 0xFF);
+            buffer.AddByte(bits[i] & 0xFF);
         }
-        String pointer = "";
-        int exit_c = Execute("cuMemAlloc");
-        Util.ExitCode.setExit_code(exit_c);
-        pointer = Frontend.Transmitter.getHex(8);
-        return pointer;
+
+        int exit_c = frontend.Execute("cuMemAlloc",buffer);
+        if (exit_c!=0) { return exit_c; }
+        pointer.value = frontend.getHex(8);
+        return exit_c;
     }
 
-    public void cuMemcpyHtoD(String dst, float[] src, int count) throws IOException {
-
-        Buffer.clear();
+    public int cuMemcpyHtoD(String dst, float[] src, int count) throws IOException {
+        Buffer buffer=new Buffer();
         byte[] bits = Util.longToByteArray(count);
         for (int i = 0; i < bits.length; i++) {
-            Buffer.AddByte(bits[i] & 0xFF);
+            buffer.AddByte(bits[i] & 0xFF);
         }
-        Buffer.Add(dst);
+        buffer.Add(dst);
         for (int i = 0; i < bits.length; i++) {
-            Buffer.AddByte(bits[i] & 0xFF);
+            buffer.AddByte(bits[i] & 0xFF);
         }
 
-        Buffer.Add(src);
-        int exit_c = Execute("cuMemcpyHtoD");
-        Util.ExitCode.setExit_code(exit_c);
-
-
+        buffer.Add(src);
+        int exit_c = frontend.Execute("cuMemcpyHtoD",buffer);
+        if (exit_c!=0) { return exit_c; }
+        return exit_c;
     }
 
-    public float[] cuMemcpyDtoH(String srcDevice, long ByteCount) throws IOException {
+    public int cuMemcpyDtoH(String srcDevice, long byteCount, FloatArrayParam result) throws IOException {
+        Buffer buffer=new Buffer();
+        buffer.Add(srcDevice);
 
-        Buffer.clear();
-        Buffer.Add(srcDevice);
-
-        byte[] bits = Util.longToByteArray(ByteCount);
+        byte[] bits = Util.longToByteArray(byteCount);
         for (int i = 0; i < bits.length; i++) {
-            Buffer.AddByte(bits[i] & 0xFF);
+            buffer.AddByte(bits[i] & 0xFF);
         }
-        int exit_c = Execute("cuMemcpyDtoH");
-        Util.ExitCode.setExit_code(exit_c);
+        int exit_c = frontend.Execute("cuMemcpyDtoH",buffer);
+        if (exit_c!=0) { return exit_c; }
 
-        int sizeType = (int) ByteCount;// 24576;//98304;
-        float[] result = new float[sizeType / 4];
-        byte[] inBuffer = new byte[sizeType];
-        ;
-        Frontend.in.read(inBuffer, 0, 8);
+        frontend.readBytes(8);
 
-        int bytesToRead = (int) ByteCount;
+        int sizeType = (int) byteCount;
+        byte[] inBuffer=new byte[sizeType];;
+
+        int bytesToRead=(int)byteCount;
         int bytesRead;
 
         int offset = 0;
         do {
-            bytesRead = Frontend.in.read(inBuffer, offset, bytesToRead);
-            bytesToRead = bytesToRead - bytesRead;
-            offset = offset + bytesRead;
+            bytesRead = frontend.read(inBuffer,offset,bytesToRead);
+            bytesToRead=bytesToRead-bytesRead;
+            offset=offset+bytesRead;
 
-        } while (offset < ByteCount);
+        } while (offset<byteCount);
 
-        int i = 0;
+        result.values = new float[sizeType/4];
+        int i=0;
         for (offset = 0; offset < sizeType; offset += 4) {
-            result[i] = Frontend.Transmitter.getFloat(inBuffer, offset);
+            result.values[i] =frontend.getFloat(inBuffer, offset);
             i++;
         }
 
-        return result;
+        return exit_c;
+
 
     }
 
-    public void cuMemFree(String ptr) throws IOException {
-        Buffer.clear();
-        Buffer.Add(ptr);
-        int exit_c = Execute("cuMemFree");
-        Util.ExitCode.setExit_code(exit_c);
-
+    public int cuMemFree(String ptr) throws IOException {
+        Buffer buffer=new Buffer();
+        buffer.Add(ptr);
+        int exit_c = frontend.Execute("cuMemFree",buffer);
+        if (exit_c!=0) { return exit_c; }
+        return exit_c;
     }
 
 	/* CUDA DRIVER INITIALIZATION */
 
     public int cuInit(int flags) throws IOException {
-
-        Buffer.clear();
-        Buffer.AddInt(flags);
-        int exit_c = Execute("cuInit");
-        Util.ExitCode.setExit_code(exit_c);
-        return 0;
+        Buffer buffer=new Buffer();
+        buffer.AddInt(flags);
+        int exit_c = frontend.Execute("cuInit",buffer);
+        if (exit_c!=0) { return exit_c; }
+        return exit_c;
     }
 
     /* CUDA DRIVER CONTEXT */
-    public String cuCtxCreate(int flags, int dev) throws IOException {
-
-        Buffer.clear();
-        Buffer.AddInt(flags);
-        Buffer.AddInt(dev);
-        int exit_c = Execute("cuCtxCreate");
-        Util.ExitCode.setExit_code(exit_c);
-        return Frontend.Transmitter.getHex(8);
+    public int cuCtxCreate(int flags, int dev, StringParam context) throws IOException {
+        Buffer buffer=new Buffer();
+        buffer.AddInt(flags);
+        buffer.AddInt(dev);
+        int exit_c = frontend.Execute("cuCtxCreate",buffer);
+        if (exit_c!=0) { return exit_c; }
+        context.value=frontend.getHex(8);
+        return exit_c;
     }
 
-    public void cuCtxDestroy(String ctx) throws IOException {
-
-        Buffer.clear();
-        Buffer.Add(ctx);
-        int exit_c = Execute("cuCtxDestroy");
-        Util.ExitCode.setExit_code(exit_c);
+    public int cuCtxDestroy(String ctx) throws IOException {
+        Buffer buffer=new Buffer();
+        buffer.Add(ctx);
+        int exit_c = frontend.Execute("cuCtxDestroy",buffer);
+        if (exit_c!=0) { return exit_c; }
+        return exit_c;
     }
 
     /* CUDA DRIVER EXECUTION */
-    public void cuParamSetv(String hfunc, int offset, String ptr, int numbytes) throws IOException {
-
-        Buffer.clear();
-        Buffer.AddInt(offset);
-        Buffer.AddInt(numbytes);
+    public int cuParamSetv(String hfunc, int offset, String ptr, int numbytes) throws IOException {
+        Buffer buffer=new Buffer();
+        buffer.AddInt(offset);
+        buffer.AddInt(numbytes);
         long sizeofp = 8;
-        Buffer.Add(sizeofp);
-        Buffer.Add(ptr);
-        Buffer.Add(hfunc);
-        int exit_c = Execute("cuParamSetv");
-        Util.ExitCode.setExit_code(exit_c);
+        buffer.Add(sizeofp);
+        buffer.Add(ptr);
+        buffer.Add(hfunc);
+        int exit_c = frontend.Execute("cuParamSetv",buffer);
+        if (exit_c!=0) { return exit_c; }
+        return exit_c;
 
     }
 
-    public void cuParamSeti(String hfunc, int offset, int value) throws IOException {
-
-        Buffer.clear();
-        Buffer.AddInt(offset);
-        Buffer.AddInt(value);
-        Buffer.Add(hfunc);
-        int exit_c = Execute("cuParamSeti");
-        Util.ExitCode.setExit_code(exit_c);
+    public int cuParamSeti(String hfunc, int offset, int value) throws IOException {
+        Buffer buffer=new Buffer();
+        buffer.AddInt(offset);
+        buffer.AddInt(value);
+        buffer.Add(hfunc);
+        int exit_c = frontend.Execute("cuParamSeti",buffer);
+        if (exit_c!=0) { return exit_c; }
+        return exit_c;
     }
 
-    public void cuParamSetSize(String hfunc, int numbytes) throws IOException {
-
-        Buffer.clear();
-        Buffer.AddInt(numbytes);
-        Buffer.Add(hfunc);
-        int exit_c = Execute("cuParamSetSize");
-        Util.ExitCode.setExit_code(exit_c);
+    public int cuParamSetSize(String hfunc, int numbytes) throws IOException {
+        Buffer buffer=new Buffer();
+        buffer.AddInt(numbytes);
+        buffer.Add(hfunc);
+        int exit_c = frontend.Execute("cuParamSetSize",buffer);
+        if (exit_c!=0) { return exit_c; }
+        return exit_c;
     }
 
-    public void cuFuncSetBlockShape(String hfunc, int x, int y, int z) throws IOException {
-
-        Buffer.clear();
-        Buffer.AddInt(x);
-        Buffer.AddInt(y);
-        Buffer.AddInt(z);
-        Buffer.Add(hfunc);
-        int exit_c = Execute("cuFuncSetBlockShape");
-        Util.ExitCode.setExit_code(exit_c);
+    public int cuFuncSetBlockShape(String hfunc, int x, int y, int z) throws IOException {
+        Buffer buffer=new Buffer();
+        buffer.AddInt(x);
+        buffer.AddInt(y);
+        buffer.AddInt(z);
+        buffer.Add(hfunc);
+        int exit_c = frontend.Execute("cuFuncSetBlockShape",buffer);
+        if (exit_c!=0) { return exit_c; }
+        return exit_c;
     }
 
-    public void cuFuncSetSharedSize(String hfunc, int bytes) throws IOException {
-
-        Buffer.clear();
+    public int cuFuncSetSharedSize(String hfunc, int bytes) throws IOException {
+        Buffer buffer=new Buffer();
         byte[] bits = Util.intToByteArray(bytes);
         for (int i = 0; i < bits.length; i++) {
-            Buffer.AddByte(bits[i] & 0xFF);
+            buffer.AddByte(bits[i] & 0xFF);
         }
-        Buffer.Add(hfunc);
-        int exit_c = Execute("cuFuncSetSharedSize");
-        Util.ExitCode.setExit_code(exit_c);
+        buffer.Add(hfunc);
+        int exit_c = frontend.Execute("cuFuncSetSharedSize",buffer);
+        if (exit_c!=0) { return exit_c; }
+        return exit_c;
     }
 
-    public void cuLaunchGrid(String hfunc, int grid_width, int grid_height) throws IOException {
-
-        Buffer.clear();
-        Buffer.AddInt(grid_width);
-        Buffer.AddInt(grid_height);
-        Buffer.Add(hfunc);
-        int exit_c = Execute("cuLaunchGrid");
-        Util.ExitCode.setExit_code(exit_c);
+    public int cuLaunchGrid(String hfunc, int grid_width, int grid_height) throws IOException {
+        Buffer buffer=new Buffer();
+        buffer.AddInt(grid_width);
+        buffer.AddInt(grid_height);
+        buffer.Add(hfunc);
+        int exit_c = frontend.Execute("cuLaunchGrid",buffer);
+        if (exit_c!=0) { return exit_c; }
+        return exit_c;
     }
 
 	/* CUDA DRIVER MODULE */
 
-    public String cuModuleGetFunction(String cmodule, String str) throws IOException {
+    public int cuModuleGetFunction(String cmodule, String str,StringParam pointer) throws IOException {
+        Buffer buffer=new Buffer();
 
-        Buffer.clear();
         str = str + "\0";
         long size = str.length();
         byte[] bits = Util.longToByteArray(size);
 
         for (int i = 0; i < bits.length; i++) {
-            Buffer.AddByte(bits[i] & 0xFF);
+            buffer.AddByte(bits[i] & 0xFF);
         }
         for (int i = 0; i < bits.length; i++) {
-            Buffer.AddByte(bits[i] & 0xFF);
+            buffer.AddByte(bits[i] & 0xFF);
         }
         for (int i = 0; i < size; i++) {
-            Buffer.AddByte(str.charAt(i));
+            buffer.AddByte(str.charAt(i));
         }
 
-        Buffer.Add(cmodule);
+        buffer.Add(cmodule);
 
-        int exit_c = Execute("cuModuleGetFunction");
-        Util.ExitCode.setExit_code(exit_c);
-        String pointer = "";
-        pointer = Frontend.Transmitter.getHex(8);
-        for (int i = 0; i < Frontend.resultBufferSize - 8; i++) {
-            Frontend.in.readByte();
+        IntParam result=new IntParam();
+        int exit_c = frontend.Execute("cuModuleGetFunction",buffer,result);
+        if (exit_c!=0) { return exit_c; }
+        int resultBufferSize=result.value;
+        pointer.value = frontend.getHex(8);
+        for (int i = 0; i <resultBufferSize - 8; i++) {
+            frontend.readByte();
         }
 
-        return pointer;
+        return exit_c;
 
     }
 
-    public String cuModuleLoadDataEx(String ptxSource, int jitNumOptions,
-                                     int[] jitOptions, long jitOptVals0, char[] jitOptVals1, long jitOptVals2) throws IOException {
+    public int cuModuleLoadDataEx(String ptxSource, int jitNumOptions,
+                                     int[] jitOptions, long jitOptVals0, char[] jitOptVals1, long jitOptVals2, StringParam pointer) throws IOException {
 
-        Log.v(TAG, "Entered cuModuleLoadDataEx");
-        Log.v(TAG, "PTXsource length: " + ptxSource.length());
+        Log.v(LOG_TAG, "Entered cuModuleLoadDataEx");
+        Log.v(LOG_TAG, "PTXsource length: " + ptxSource.length());
 
-        Buffer.clear();
-        Buffer.AddInt(jitNumOptions);
-        Buffer.Add(jitOptions);
+        Buffer buffer=new Buffer();
 
-        Log.v(TAG, "cuModuleLoadDataEx 1");
+        buffer.AddInt(jitNumOptions);
+        buffer.Add(jitOptions);
+
+        Log.v(LOG_TAG, "cuModuleLoadDataEx 1");
 
         // addStringForArgument
         ptxSource = ptxSource + "\0";
         long sizePtxSource = ptxSource.length();
 
-        Log.v(TAG, "cuModuleLoadDataEx 2");
+        Log.v(LOG_TAG, "cuModuleLoadDataEx 2");
 
         long size = sizePtxSource;
         byte[] bits = Util.longToByteArray(size);
 
-        Log.v(TAG, "cuModuleLoadDataEx 3");
+        Log.v(LOG_TAG, "cuModuleLoadDataEx 3");
 
         for (int i = 0; i < bits.length; i++) {
-            Buffer.AddByte(bits[i] & 0xFF);
+            buffer.AddByte(bits[i] & 0xFF);
         }
 
-        Log.v(TAG, "cuModuleLoadDataEx 4");
+        Log.v(LOG_TAG, "cuModuleLoadDataEx 4");
 
         for (int i = 0; i < bits.length; i++) {
-            Buffer.AddByte(bits[i] & 0xFF);
+            buffer.AddByte(bits[i] & 0xFF);
         }
 
-        Log.v(TAG, "cuModuleLoadDataEx 5");
+        Log.v(LOG_TAG, "cuModuleLoadDataEx 5");
 
-        Buffer.AddByte4Ptx(ptxSource, sizePtxSource);
+        buffer.AddByte4Ptx(ptxSource, sizePtxSource);
 
-        Log.v(TAG, "cuModuleLoadDataEx 6");
+        Log.v(LOG_TAG, "cuModuleLoadDataEx 6");
 
-        Buffer.Add(8);
+        buffer.Add(8);
         long OptVals0 = jitOptVals0;
         byte[] bit = Util.longToByteArray(OptVals0);
         for (int i = 0; i < bit.length; i++) {
-            Buffer.AddByte(bit[i] & 0xFF);
+            buffer.AddByte(bit[i] & 0xFF);
         }
 
-        Log.v(TAG, "cuModuleLoadDataEx 7");
+        Log.v(LOG_TAG, "cuModuleLoadDataEx 7");
 
-        Buffer.Add(8);
-        Buffer.AddByte(160);
-        Buffer.AddByte(159);
-        Buffer.AddByte(236);
-        Buffer.AddByte(1);
-        Buffer.AddByte(0);
-        Buffer.AddByte(0);
-        Buffer.AddByte(0);
-        Buffer.AddByte(0);
+        buffer.Add(8);
+        buffer.AddByte(160);
+        buffer.AddByte(159);
+        buffer.AddByte(236);
+        buffer.AddByte(1);
+        buffer.AddByte(0);
+        buffer.AddByte(0);
+        buffer.AddByte(0);
+        buffer.AddByte(0);
 
-        Log.v(TAG, "cuModuleLoadDataEx 8");
+        Log.v(LOG_TAG, "cuModuleLoadDataEx 8");
 
-        Buffer.Add(8);
+        buffer.Add(8);
         long OptVals2 = jitOptVals2;
         byte[] bit2 = Util.longToByteArray(OptVals2);
         for (int i = 0; i < bit.length; i++) {
-            Buffer.AddByte(bit2[i] & 0xFF);
+            buffer.AddByte(bit2[i] & 0xFF);
         }
 
-        Log.v(TAG, "cuModuleLoadDataEx 9");
+        Log.v(LOG_TAG, "cuModuleLoadDataEx 9");
 
-        int exit_c = Execute("cuModuleLoadDataEx");
-        Util.ExitCode.setExit_code(exit_c);
-        String pointer = "";
+        IntParam result=new IntParam();
+        int exit_c = frontend.Execute("cuModuleLoadDataEx",buffer,result);
+        if (exit_c!=0) { return exit_c; }
+        int resultBufferSize=result.value;
 
-        Log.v(TAG, "cuModuleLoadDataEx 10");
+        Log.v(LOG_TAG, "cuModuleLoadDataEx 10");
 
-        pointer = Frontend.Transmitter.getHex(8);
+        pointer.value = frontend.getHex(8);
 
-        Log.v(TAG, "cuModuleLoadDataEx 11");
+        Log.v(LOG_TAG, "cuModuleLoadDataEx 11");
 
-        for (int i = 0; i < Frontend.resultBufferSize - 8; i++)
-            Frontend.in.readByte();
+        for (int i = 0; i < resultBufferSize - 8; i++)
+            frontend.readByte();
 
-        return pointer;
+        return exit_c;
     }
 
 }
