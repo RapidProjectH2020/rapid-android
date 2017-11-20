@@ -56,6 +56,7 @@ public class NetworkProfilerServer implements Runnable {
         try {
             serverSocket = new ServerSocket(config.getClonePortBandwidthTest());
             while (true) {
+                Log.i(TAG, "Listening for client connections...");
                 Socket clientSocket = serverSocket.accept();
                 new Thread(new ClientThread(clientSocket)).start();
             }
@@ -66,10 +67,10 @@ public class NetworkProfilerServer implements Runnable {
     }
 
     private class ClientThread implements Runnable {
-
         private Socket clientSocket;
 
         public ClientThread(Socket clientSocket) {
+            Log.i(TAG, "New client connected for network test");
             this.clientSocket = clientSocket;
         }
 
@@ -77,9 +78,14 @@ public class NetworkProfilerServer implements Runnable {
         public void run() {
             int request = 0;
 
-            try (InputStream is = clientSocket.getInputStream();
-                 OutputStream os = clientSocket.getOutputStream();
-                 DataOutputStream dos = new DataOutputStream(os)) {
+            InputStream is = null;
+            OutputStream os;
+            DataOutputStream dos = null;
+
+            try {
+                is = clientSocket.getInputStream();
+                os = clientSocket.getOutputStream();
+                dos = new DataOutputStream(os);
 
                 while (request != -1) {
                     request = is.read();
@@ -134,11 +140,16 @@ public class NetworkProfilerServer implements Runnable {
                 }
 
             } catch (IOException e) {
+
             } finally {
                 Log.i(TAG, "Client finished bandwidth measurement: " + request);
 
-                if (request == RapidMessages.UPLOAD_FILE)
+                if (request == RapidMessages.UPLOAD_FILE) {
                     totalTimeBytesRead = System.nanoTime() - totalTimeBytesRead;
+                }
+
+                RapidUtils.closeQuietly(is);
+                RapidUtils.closeQuietly(dos);
             }
         }
     }

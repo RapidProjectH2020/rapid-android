@@ -18,15 +18,21 @@
  -->
 
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
     package="eu.project.rapid.as"
     android:versionCode="1"
-    android:versionName="1.0" >
+    android:versionName="1.0">
 
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
     <uses-permission android:name="android.permission.READ_PHONE_STATE" />
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+
+    <!-- The AS declares minSDK=15 since I need it to run on the Android VM on Amazon, which is 4.0.
+     The AC declares minSDK=19, so I just force the AS project to use minSDK 15 here.
+     -->
+    <uses-sdk tools:overrideLibrary="eu.project.rapid.ac"/>
 
     <application
         android:allowBackup="true"

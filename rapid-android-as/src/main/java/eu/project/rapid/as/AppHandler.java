@@ -112,6 +112,7 @@ public class AppHandler implements Runnable {
      * that all threads use the same library then,
      * otherwise one can end up not finding the library anymore at all.
      */
+    private static final Object syncLibrariesExtractObject = new Object(); // sync libraries extraction
     private List<File> libraries = new LinkedList<>();
     private static Map<String, Map<String, Integer>> librariesIndex = new ConcurrentHashMap<>();
 
@@ -390,98 +391,104 @@ public class AppHandler implements Runnable {
      */
 
     @SuppressWarnings("unchecked")
-    private synchronized void addLibraries(File dexFile) {
-        Long startTime = System.nanoTime();
+    private void addLibraries(File dexFile) {
 
-        ZipFile apkFile;
+        synchronized (syncLibrariesExtractObject) {
+
+
+            Long startTime = System.nanoTime();
+
+            ZipFile apkFile;
 //        LinkedList<File> libFiles = new LinkedList<>();
-        try {
-            apkFile = new ZipFile(dexFile);
-            Enumeration<ZipEntry> entries = (Enumeration<ZipEntry>) apkFile.entries();
-            ZipEntry entry;
-            while (entries.hasMoreElements()) {
-                entry = entries.nextElement();
-                // Zip entry for a lib file is in the form of
-                // lib/platform/library.so
-                // But only load x86/x86_64 libraries on the server side
-                if (entry.getName().matches("lib/" + AccelerationServer.arch + "/(.*).so")) {
-                    Log.d(TAG, "Matching APK entry - " + entry.getName());
-                    // Unzip the lib file from apk
-                    BufferedInputStream is = new BufferedInputStream(apkFile.getInputStream(entry));
+            try {
+                apkFile = new ZipFile(dexFile);
+                Enumeration<ZipEntry> entries = (Enumeration<ZipEntry>) apkFile.entries();
+                ZipEntry entry;
+                while (entries.hasMoreElements()) {
+                    entry = entries.nextElement();
+                    // Zip entry for a lib file is in the form of
+                    // lib/platform/library.so
+                    // But only load x86/x86_64 libraries on the server side
+                    if (entry.getName().matches("lib/" + AccelerationServer.arch + "/(.*).so")) {
+                        Log.d(TAG, "Matching APK entry - " + entry.getName());
+                        // Unzip the lib file from apk
+                        BufferedInputStream is = new BufferedInputStream(apkFile.getInputStream(entry));
 
-                    // Folder where to put the libraries (usually this will resolve to:
-                    // /data/data/eu.rapid.project.as/files)
-                    File libFolder = new File(mContext.getFilesDir().getAbsolutePath());
+                        // Folder where to put the libraries (usually this will resolve to:
+                        // /data/data/eu.rapid.project.as/files)
+                        File libFolder = new File(mContext.getFilesDir().getAbsolutePath());
 
-                    // Get the library name without the .so extension
-                    final String libName = entry.getName().replace("lib/" +
-                            AccelerationServer.arch + "/", "").replace(".so", "");
+                        // Get the library name without the .so extension
+                        final String libName = entry.getName().replace("lib/" +
+                                AccelerationServer.arch + "/", "").replace(".so", "");
 
-                    if (!librariesIndex.containsKey(appName)) {
-                        librariesIndex.put(appName, new HashMap<String, Integer>());
-                    }
+                        if (!librariesIndex.containsKey(appName)) {
+                            librariesIndex.put(appName, new HashMap<String, Integer>());
+                        }
 
-                    // The sequence number to append to the library name
-                    int libSeqNr = 0;
-                    if (librariesIndex.get(appName).containsKey(libName)) {
-                        libSeqNr = librariesIndex.get(appName).get(libName);
-                    } else {
-                        for (File f : libFolder.listFiles(new FilenameFilter() {
-                            @Override
-                            public boolean accept(File file, String s) {
-                                return s.matches(libName + "-\\d+");
-                            }
-                        })) {
-                            // Scan all the previously created folder libraries
-                            int lastIndexDash = f.getName().lastIndexOf("-");
-                            if (lastIndexDash != -1) {
-                                try {
-                                    libSeqNr = Math.max(libSeqNr, Integer.parseInt(f.getName().substring(lastIndexDash + 1)));
-                                } catch (Exception e) {
-                                    Log.w(TAG,
-                                            "Library file does not contain any number in the name, maybe is not written by us!");
+                        // The sequence number to append to the library name
+                        int libSeqNr = 0;
+                        if (librariesIndex.get(appName).containsKey(libName)) {
+                            libSeqNr = librariesIndex.get(appName).get(libName);
+                        } else {
+                            for (File f : libFolder.listFiles(new FilenameFilter() {
+                                @Override
+                                public boolean accept(File file, String s) {
+                                    return s.matches(libName + "-\\d+");
+                                }
+                            })) {
+
+                                // Scan all the previously created folder libraries
+                                int lastIndexDash = f.getName().lastIndexOf("-");
+                                if (lastIndexDash != -1) {
+                                    try {
+                                        libSeqNr = Math.max(libSeqNr, Integer.parseInt(f.getName().substring(lastIndexDash + 1)));
+                                    } catch (Exception e) {
+                                        Log.w(TAG,
+                                                "Library file does not contain any number in the name, maybe is not written by us!");
+                                    }
                                 }
                             }
                         }
+
+                        libSeqNr++;
+                        librariesIndex.get(appName).put(libName, libSeqNr);
+
+                        File currLibFolder =
+                                new File(libFolder.getAbsolutePath() + File.separator + libName + "-" + libSeqNr);
+                        if (!currLibFolder.mkdir()) {
+                            Log.e(TAG, "Could not create folder: " + currLibFolder);
+                        }
+
+                        File libFile =
+                                new File(currLibFolder.getAbsolutePath() + File.separator + libName + ".so");
+                        if (!libFile.createNewFile()) {
+                            Log.e(TAG, "Could not create file: " + libFile);
+                        } else {
+                            Log.d(TAG, "Writing lib file to " + libFile.getAbsolutePath());
+                            FileOutputStream fos = new FileOutputStream(libFile);
+                            BufferedOutputStream dest = new BufferedOutputStream(fos, Constants.BUFFER_SIZE_SMALL);
+
+                            byte data[] = new byte[Constants.BUFFER_SIZE_SMALL];
+                            int count;
+                            while ((count = is.read(data, 0, Constants.BUFFER_SIZE_SMALL)) != -1) {
+                                dest.write(data, 0, count);
+                            }
+                            dest.flush();
+                            dest.close();
+                            is.close();
+
+                            // Store the library on the map
+                            libraries.add(libFile);
+                        }
                     }
-
-                    libSeqNr++;
-                    librariesIndex.get(appName).put(libName, libSeqNr);
-
-                    File currLibFolder =
-                            new File(libFolder.getAbsolutePath() + File.separator + libName + "-" + libSeqNr);
-                    if (!currLibFolder.mkdir()) {
-                        Log.e(TAG, "Could not create folder: " + currLibFolder);
-                    }
-
-                    File libFile =
-                            new File(currLibFolder.getAbsolutePath() + File.separator + libName + ".so");
-                    if (!libFile.createNewFile()) {
-                        Log.e(TAG, "Could not create file: " + libFile);
-                    }
-
-                    Log.d(TAG, "Writing lib file to " + libFile.getAbsolutePath());
-                    FileOutputStream fos = new FileOutputStream(libFile);
-                    BufferedOutputStream dest = new BufferedOutputStream(fos, Constants.BUFFER_SIZE_SMALL);
-
-                    byte data[] = new byte[Constants.BUFFER_SIZE_SMALL];
-                    int count;
-                    while ((count = is.read(data, 0, Constants.BUFFER_SIZE_SMALL)) != -1) {
-                        dest.write(data, 0, count);
-                    }
-                    dest.flush();
-                    dest.close();
-                    is.close();
-
-                    // Store the library on the map
-                    libraries.add(libFile);
                 }
+            } catch (IOException e) {
+                Log.d(TAG, "ERROR: File unzipping error " + e);
             }
-        } catch (IOException e) {
-            Log.d(TAG, "ERROR: File unzipping error " + e);
+            Log.d(TAG,
+                    "Duration of unzipping libraries - " + ((System.nanoTime() - startTime) / 1000000) + "ms");
         }
-        Log.d(TAG,
-                "Duration of unzipping libraries - " + ((System.nanoTime() - startTime) / 1000000) + "ms");
     }
 
     /**

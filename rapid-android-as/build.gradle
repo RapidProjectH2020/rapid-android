@@ -6,7 +6,7 @@ android {
 
     defaultConfig {
         applicationId "eu.project.rapid.as"
-        minSdkVersion 19
+        minSdkVersion 15 // I need minSdk 15 because in Amazon EC2 we have up to Android-4.0
 
         // If I set a higher target I would need to deal with runtime permissions,
         // which cannot be done automatically without user intervention.

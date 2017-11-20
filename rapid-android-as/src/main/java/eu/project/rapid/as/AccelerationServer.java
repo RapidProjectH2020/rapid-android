@@ -199,8 +199,11 @@ public class AccelerationServer extends Service {
 
     private void copyCryptoKeysFromAssets() {
         Log.v(TAG, "Copying the keystore from assets to the rapid folder...");
-        try (InputStream is = this.getAssets().open("keystore.bks");
-             OutputStream fos = new FileOutputStream(Constants.SSL_KEYSTORE)) {
+        InputStream is = null;
+        OutputStream fos = null;
+        try {
+            is = this.getAssets().open("keystore.bks");
+            fos = new FileOutputStream(Constants.RAPID_FOLDER + File.separator + Constants.SSL_KEYSTORE);
             byte[] buffer = new byte[1024];
             int length;
             while ((length = is.read(buffer)) > 0) {
@@ -209,6 +212,9 @@ public class AccelerationServer extends Service {
             Log.v(TAG, "Finished copying the keystore!");
         } catch (IOException e) {
             Log.v(TAG, "Exception while copying the keystore: " + e);
+        } finally {
+            RapidUtils.closeQuietly(is);
+            RapidUtils.closeQuietly(fos);
         }
     }
 
