@@ -685,10 +685,12 @@ public class NetworkProfiler {
 
             // This will throw an exception when the VM will close the socket after 3 seconds
             Log.i(TAG, "UL rate measurement, waiting the VM to send the OK byte...");
-            while (true) {
+            long start = System.nanoTime();
+            while ((System.nanoTime() - start) / 1000000000 < 3) {
                 os.write(buffer);
-                is.read();
             }
+            Log.i(TAG, "Finished upload measurement.");
+
         } catch (UnknownHostException e) {
             Log.w(TAG, "UnknownHostException while measuring upload rate: " + e);
         } catch (SocketException e) {

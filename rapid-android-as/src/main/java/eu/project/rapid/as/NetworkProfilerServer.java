@@ -68,6 +68,9 @@ public class NetworkProfilerServer implements Runnable {
 
     private class ClientThread implements Runnable {
         private Socket clientSocket;
+        InputStream is = null;
+        OutputStream os = null;
+        DataOutputStream dos = null;
 
         public ClientThread(Socket clientSocket) {
             Log.i(TAG, "New client connected for network test");
@@ -77,10 +80,6 @@ public class NetworkProfilerServer implements Runnable {
         @Override
         public void run() {
             int request = 0;
-
-            InputStream is = null;
-            OutputStream os;
-            DataOutputStream dos = null;
 
             try {
                 is = clientSocket.getInputStream();
@@ -111,6 +110,8 @@ public class NetworkProfilerServer implements Runnable {
                                             elapsed = (System.nanoTime() - t0) / 1000000;
                                         }
                                     }
+                                    RapidUtils.closeQuietly(is);
+                                    RapidUtils.closeQuietly(dos);
                                     RapidUtils.closeQuietly(clientSocket);
                                 }
 
@@ -120,7 +121,6 @@ public class NetworkProfilerServer implements Runnable {
                             totalBytesRead = 0;
                             while (true) {
                                 totalBytesRead += is.read(buffer);
-                                os.write(1);
                             }
 
                         case RapidMessages.UPLOAD_FILE_RESULT:
@@ -140,7 +140,7 @@ public class NetworkProfilerServer implements Runnable {
                 }
 
             } catch (IOException e) {
-
+                Log.i(TAG, "IOException because 3 seconds have passed (this is the expected behavior)");
             } finally {
                 Log.i(TAG, "Client finished bandwidth measurement: " + request);
 
@@ -150,6 +150,7 @@ public class NetworkProfilerServer implements Runnable {
 
                 RapidUtils.closeQuietly(is);
                 RapidUtils.closeQuietly(dos);
+                RapidUtils.closeQuietly(clientSocket);
             }
         }
     }
