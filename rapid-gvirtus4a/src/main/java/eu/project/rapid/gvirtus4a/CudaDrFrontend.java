@@ -12,8 +12,8 @@ import eu.project.rapid.gvirtus4a.params.StringParam;
 public class CudaDrFrontend {
 
     private static final String LOG_TAG = "CUDA DRIVER FRONTEND";
-    private Frontend frontend;
 
+    private Frontend frontend;
     public CudaDrFrontend() {
         Providers providers = Providers.getInstance();
         Provider provider = providers.getBest();
@@ -21,13 +21,21 @@ public class CudaDrFrontend {
     }
 
     public CudaDrFrontend(String serverIpAddress, int port) {
+
         frontend=Frontend.getFrontend(serverIpAddress, port);
+
     }
 
     public void close() {
         frontend.close();
+        frontend=null;
+
     }
 
+    @Override
+    public void finalize() {
+        close();
+    }
     /*
     public int Execute(String routine) throws IOException {
 
