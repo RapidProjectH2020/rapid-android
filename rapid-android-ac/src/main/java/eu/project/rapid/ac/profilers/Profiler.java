@@ -115,7 +115,7 @@ public class Profiler {
             lastLogRecord.wifiEnergy = phone.getEstimatedWiFiEnergy();
             lastLogRecord.threeGEnergy = phone.getEstimated3GEnergy();
 
-            Log.d(TAG, "Log record - " + lastLogRecord.toString());
+            Log.i(TAG, "Log record - " + lastLogRecord.toString());
 
             try {
                 synchronized (this) {

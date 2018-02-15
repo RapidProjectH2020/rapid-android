@@ -15,6 +15,7 @@
  *******************************************************************************/
 package eu.project.rapid.ac;
 
+import android.Manifest;
 import android.app.ProgressDialog;
 import android.content.BroadcastReceiver;
 import android.content.Context;
@@ -25,6 +26,9 @@ import android.content.pm.PackageManager.NameNotFoundException;
 import android.os.AsyncTask;
 import android.util.Log;
 import android.util.SparseArray;
+
+import com.nabinbhandari.android.permissions.PermissionHandler;
+import com.nabinbhandari.android.permissions.Permissions;
 
 import java.io.BufferedInputStream;
 import java.io.File;
@@ -85,6 +89,9 @@ import eu.project.rapid.common.RapidConstants.ExecLocation;
 import eu.project.rapid.common.RapidMessages;
 import eu.project.rapid.common.RapidUtils;
 
+import static eu.project.rapid.ac.profilers.Profiler.REGIME_CLIENT;
+import static eu.project.rapid.ac.profilers.Profiler.REGIME_SERVER;
+
 /**
  * The most important class of the framework for the client program - controls DSE, profilers,
  * communicates with remote server.
@@ -100,9 +107,7 @@ public class DFE {
     private static final String TAG = "DFE";
     private Configuration config;
 
-    private static int mRegime;
-    private static final int REGIME_CLIENT = 1;
-    private static final int REGIME_SERVER = 2;
+    private static volatile int mRegime;
     private static COMM_TYPE commType = COMM_TYPE.SSL;
     private ExecLocation userChoice = ExecLocation.DYNAMIC;
 
@@ -182,9 +187,18 @@ public class DFE {
 
         Log.i(TAG, "Current device: " + myPhoneSpecs);
 
-        createRapidFoldersIfNotExist();
-        readConfigurationFile();
-        initializeCrypto();
+        Log.i(TAG, "Trying to get the runtime WRITE_EXTERNAL_STORAGE permission...");
+        Permissions.check(mContext, Manifest.permission.WRITE_EXTERNAL_STORAGE,
+                "I need to write log files on the sdcard",
+                new PermissionHandler() {
+                    @Override
+                    public void onGranted() {
+                        Log.i(TAG, "WRITE_EXTERNAL_STORAGE permission granted.");
+                        createRapidFoldersIfNotExist();
+                        readConfigurationFile();
+                        initializeCrypto();
+                    }
+                });
 
         mDSE = DSE.getInstance(this.mAppName);
 
@@ -211,7 +225,7 @@ public class DFE {
      */
     @SuppressWarnings("unused")
     private DFE() {
-        mRegime = REGIME_SERVER;
+        DFE.mRegime = REGIME_SERVER;
     }
 
     /**
@@ -250,7 +264,7 @@ public class DFE {
     private void createRapidFoldersIfNotExist() {
         File rapidDir = new File(Constants.RAPID_FOLDER);
         if (!rapidDir.exists()) {
-            if (!rapidDir.mkdirs()) {
+            if (!rapidDir.mkdir()) {
                 Log.w(TAG, "Could not create the RAPID folder: " + Constants.RAPID_FOLDER);
             }
         }

@@ -33,37 +33,36 @@ import eu.project.rapid.common.RapidConstants;
  * 
  */
 public class LogRecord {
-	public String appName;
-	public String methodName;
-	public RapidConstants.ExecLocation execLocation;
-	public long prepareDataDuration;
-	public long execDuration;
-	public long pureDuration;
-	public long energyConsumption;
-	public double cpuEnergy;
-	public double screenEnergy;
-	public double wifiEnergy;
-	public double threeGEnergy;
+	String appName;
+	public static String methodName;
+	RapidConstants.ExecLocation execLocation;
+	long prepareDataDuration;
+	long execDuration;
+	long pureDuration;
+	long energyConsumption;
+	double cpuEnergy;
+	double screenEnergy;
+	double wifiEnergy;
+	double threeGEnergy;
 	
-	public Long threadCpuTime;
-	public int instructionCount;
-	public int methodCount;
-	public int threadAllocSize;
-	public int threadGcInvocationCount;
-	public int globalGcInvocationCount;
+	private Long threadCpuTime;
+	private int instructionCount;
+	private int methodCount;
+	private int threadAllocSize;
+	private int threadGcInvocationCount;
+	private int globalGcInvocationCount;
 
-	public String networkType;
-	public String networkSubtype;
-	public int rtt;
-	public int ulRate = -1;
-	public int dlRate = -1;
-	public long rxBytes = -1;
-	public long txBytes = -1;
+	String networkType;
+	String networkSubtype;
+	private int rtt;
+	int ulRate = -1;
+	int dlRate = -1;
+	private long rxBytes = -1;
+	private long txBytes = -1;
 
-	public long batteryVoltageChange;
-	public long logRecordTime;
-	
-	public static final String LOG_HEADERS = "#MethodName,ExecLocation,PrepareDataDuration,ExecDuration,PureDuration," +
+	private long batteryVoltageChange;
+
+    static final String LOG_HEADERS = "#MethodName,ExecLocation,PrepareDataDuration,ExecDuration,PureDuration," +
 			"EnergyConsumption,CpuEnergy,ScreenEnergy,WifiEnergy,3GEnergy," +
 			"ThreadCpuTime,InstructionCount,MethodCount,ThreadAllocSize,ThreadGcInvocCount,GlobalGcInvocCount," +
 			"NetType,NetSubtype,RTT,UlRate,DlRate,RxBytes,TxBytes," +
@@ -80,8 +79,8 @@ public class LogRecord {
 	 * @param devProfiler
 	 *            instance of DeviceProfiler
 	 */
-	public LogRecord(ProgramProfiler progProfiler, NetworkProfiler netProfiler,
-			DeviceProfiler devProfiler) {
+	LogRecord(ProgramProfiler progProfiler, NetworkProfiler netProfiler,
+			  DeviceProfiler devProfiler) {
 		appName = progProfiler.appName;
 		methodName = progProfiler.methodName;
 		execDuration = progProfiler.execTime;
@@ -119,8 +118,8 @@ public class LogRecord {
 	 * Convert the log record to string for storing
 	 */
 	public String toString() {
-		
-		logRecordTime = System.currentTimeMillis();
+
+        long logRecordTime = System.currentTimeMillis();
 		String progProfilerRecord = methodName + "," + execLocation + "," + prepareDataDuration + ","
 				+ execDuration + "," + pureDuration + "," + energyConsumption + "," + 
 				cpuEnergy + "," + screenEnergy + "," + wifiEnergy + "," + threeGEnergy
@@ -130,7 +129,7 @@ public class LogRecord {
 
 		String netProfilerRecord = " , , , , , , ";
 
-		if (execLocation.equals("REMOTE")) {
+		if (execLocation.equals(RapidConstants.ExecLocation.REMOTE)) {
 			netProfilerRecord = networkType + ", " + networkSubtype + "," + rtt
 					+ "," + ulRate + "," + dlRate + "," + rxBytes + "," + txBytes;
 		}

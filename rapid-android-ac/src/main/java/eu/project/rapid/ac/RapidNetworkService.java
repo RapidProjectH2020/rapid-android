@@ -123,10 +123,10 @@ public class RapidNetworkService extends IntentService {
 
     @Override
     protected void onHandleIntent(Intent intent) {
-        Log.d(TAG, "Started the service");
+        Log.i(TAG, "Started the service");
 
         try (ServerSocket acRmServerSocket = new ServerSocket(AC_RM_PORT)) {
-            Log.d(TAG, "************* Started the AC_RM listening server ****************");
+            Log.i(TAG, "************* Started the AC_RM listening server ****************");
             readConfigurationFile();
             String qosParams = readQosParams().replace(" ", "").replace("\n", "");
 //            Log.v(TAG, "QoS params: " + qosParams);
