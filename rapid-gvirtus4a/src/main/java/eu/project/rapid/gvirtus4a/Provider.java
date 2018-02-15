@@ -50,7 +50,7 @@ public class Provider {
 
         for (int i = 0; i < deviceCount; i++) {
             cudaRtFrontend.cudaSetDevice(i);
-            CudaDeviceProp deviceProp=new CudaDeviceProp();
+            CudaDeviceProp deviceProp=new CudaDeviceProp(runtimeVersion);
             exitCode=cudaRtFrontend.cudaGetDeviceProperties(i,deviceProp);
             if (exitCode==0) {
                 properties.add(deviceProp);
