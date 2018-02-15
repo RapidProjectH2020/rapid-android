@@ -1,7 +1,7 @@
 #include <jni.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <string>
+#include <string.h>
 
 extern "C"
 JNIEXPORT jstring JNICALL
