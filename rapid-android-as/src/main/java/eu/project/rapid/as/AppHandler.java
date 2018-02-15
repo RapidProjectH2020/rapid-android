@@ -589,11 +589,22 @@ public class AppHandler implements Runnable {
             // them on the server side
             e.printStackTrace();
             return new ResultContainer(e, getObjectDuration);
-        } finally {
-            RapidUtils.closeQuietly(dsOis);
-            RapidUtils.closeQuietly(dsOos);
-            RapidUtils.closeQuietly(dsSocket);
         }
+    }
+
+    private void openDsConnection() throws IOException {
+        dsSocket = new Socket(config.getDSIp(), config.getDSPort());
+        OutputStream dsOs = dsSocket.getOutputStream();
+        InputStream dsIs = dsSocket.getInputStream();
+
+        dsOos = new ObjectOutputStream(dsOs);
+        dsOis = new ObjectInputStream(dsIs);
+    }
+
+    private void closeDsConnection() {
+        RapidUtils.closeQuietly(dsOis);
+        RapidUtils.closeQuietly(dsOos);
+        RapidUtils.closeQuietly(dsSocket);
     }
 
     private Object executeMethod(Class<?> objClass, Method runMethod) throws IllegalAccessException {
@@ -729,8 +740,11 @@ public class AppHandler implements Runnable {
             }
 
             try {
+                openDsConnection();
                 dsOos.writeByte(RapidMessages.PARALLEL_END);
+                dsOos.writeLong(AccelerationServer.vmId);
                 dsOos.flush();
+                closeDsConnection();
             } catch (Exception e) {
                 Log.e(TAG, "Exception while sending PARALLEL_END to the DS: " + e);
             }
@@ -743,8 +757,11 @@ public class AppHandler implements Runnable {
             }
 
             try {
+                openDsConnection();
                 dsOos.writeByte(RapidMessages.FORWARD_END);
+                dsOos.writeLong(AccelerationServer.vmId);
                 dsOos.flush();
+                closeDsConnection();
             } catch (Exception e) {
                 Log.e(TAG, "Exception while sending FORWARD_END to the DS: " + e);
             }
@@ -771,12 +788,15 @@ public class AppHandler implements Runnable {
         if (helperVMsAllocated) {
             Log.i(TAG, "The VMs are successfully allocated.");
             try {
+                openDsConnection();
                 if (isForwarding) {
                     dsOos.writeByte(RapidMessages.FORWARD_START);
                 } else {
                     dsOos.writeByte(RapidMessages.PARALLEL_START);
                 }
+                dsOos.writeLong(AccelerationServer.vmId);
                 dsOos.flush();
+                closeDsConnection();
             } catch (Exception e) {
                 Log.e(TAG, "Exception while sending " +
                         ((isForwarding) ? "FORWARD_START" : "PARALLEL_START") +
@@ -886,12 +906,7 @@ public class AppHandler implements Runnable {
             Log.d(TAG, "Trying to connect to the DS - " + config.getDSIp() + ":" + config.getDSPort());
 
             // Connect to the directory service
-            dsSocket = new Socket(config.getDSIp(), config.getDSPort());
-            OutputStream dsOs = dsSocket.getOutputStream();
-            InputStream dsIs = dsSocket.getInputStream();
-
-            dsOos = new ObjectOutputStream(dsOs);
-            dsOis = new ObjectInputStream(dsIs);
+            openDsConnection();
 
             Log.d(TAG, "Connection established with the DS - " + config.getDSIp() + ":"
                     + config.getDSPort());
@@ -920,6 +935,8 @@ public class AppHandler implements Runnable {
             Log.e(TAG, "Exception connecting to the DS: " + e);
         } catch (Error e) {
             Log.e(TAG, "Error connecting to the DS: " + e);
+        } finally {
+            closeDsConnection();
         }
 
         return false;
