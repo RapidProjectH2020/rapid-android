@@ -5,6 +5,8 @@ public class CudaDeviceProp {
 
 	public static final String LOG_TAG="CUDA_DEVICE_PROPERTY";
 
+    private int runtimeVersion;
+
 	private String name;
 	private long totalGlobalMem = 0;
 	/** < Global memory available on device in bytes */
@@ -148,7 +150,8 @@ public class CudaDeviceProp {
 	 * board
 	 */
 
-	public CudaDeviceProp() {
+	public CudaDeviceProp(int runtimeVersion) {
+	    this.runtimeVersion=runtimeVersion;
 	}
 
 	public String getName() {
@@ -648,10 +651,31 @@ public class CudaDeviceProp {
 	}
 
 	public byte[] getStruct() {
-		byte[] bytes = new byte[640];
-		bytes[0] = (byte) 0x78;
-		bytes[1] = (byte) 0x02;
-		for (int i = 2; i < 640; i++) {
+	    // cuda 6.5 -- 632 640 0x78 0x02
+		// cuda 8.0 -- 648 650
+		// cuda 9.0 -- 672 680
+		int size=0;
+
+        if (runtimeVersion>=6000 && runtimeVersion<7000) {
+            size = 640;
+        } else
+        if (runtimeVersion>=7000 && runtimeVersion<8000) {
+            size = 640;
+        } else
+		if (runtimeVersion>=8000 && runtimeVersion<9000) {
+		    size=650;
+        } else
+        if (runtimeVersion >=9000) {
+		    size=680;
+        }
+
+
+		int high=size/256;
+		int low=size%256;
+		byte[] bytes = new byte[size];
+		bytes[0] = (byte) low;
+		bytes[1] = (byte) high;
+		for (int i = 2; i < size; i++) {
 			bytes[i] = (byte) 0;
 		}
 		return bytes;
