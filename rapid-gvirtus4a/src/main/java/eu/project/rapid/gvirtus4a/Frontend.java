@@ -32,13 +32,15 @@ public final class Frontend {
     private Socket socket;
     private DataOutputStream dos;
     private DataInputStream dis;
+
+
     private Transmitter transmitter;
 
     private Frontend(String serverIpAddress, int port) {
         StrictMode.ThreadPolicy policy = new StrictMode.ThreadPolicy.Builder().permitAll().build();
         StrictMode.setThreadPolicy(policy);
-        Frontend.serverIpAddress = serverIpAddress;
-        Frontend.port = port;
+        this.serverIpAddress = serverIpAddress;
+        this.port = port;
         try {
             socket = new Socket(serverIpAddress, port);
             dos = new DataOutputStream(socket.getOutputStream());
@@ -57,6 +59,9 @@ public final class Frontend {
             if (dis!=null) dis.close();
             if (dos!=null) dos.close();
             if (socket!=null) socket.close();
+            dis=null;
+            dos=null;
+            socket=null;
         } catch (IOException ex) {
             throw new RuntimeException(ex);
         }
@@ -90,6 +95,9 @@ public final class Frontend {
     }
 
     public static Frontend getFrontend() {
+        Frontend.serverIpAddress=serverIpAddress;
+        Frontend.port=port;
+
         return new Frontend(serverIpAddress, port);
     }
 
@@ -165,7 +173,7 @@ public final class Frontend {
 		*/
 		int expected = 12;
         int totalRead = 0;
-        int read;
+        int read = 0;
         byte[] inBuffer = new byte[expected];
         while (totalRead < expected) {
             Log.v(LOG_TAG, "Execute 3.1, number of bytes read: " + totalRead + ", expected: " + expected);
@@ -200,5 +208,20 @@ public final class Frontend {
 
     public int read(byte[] buffer, int offset, int n) throws IOException {
         return dis.read(buffer,offset,n);
+    }
+
+    public int flush() {
+        int count=0;
+        try {
+            while (dis.available() > 0) {
+                readByte();
+                count++;
+            }
+        } catch (IOException ex) {
+            // TODO gestire la mancata connessione
+            throw new RuntimeException(ex);
+
+        }
+        return count;
     }
 }
