@@ -220,6 +220,9 @@ public class CudaRtFrontend {
 		}
 		for (int i = 0; i < outbuffer.length() - 1; i += 2) {
 			String str = outbuffer.substring(i, i + 2);
+			if (str.equals("00")) {
+				break;
+			}
 			output.append((char) Integer.parseInt(str, 16));
 		}
 		cudaDeviceProp.setName(output.toString());
@@ -317,7 +320,8 @@ public class CudaRtFrontend {
 		cudaDeviceProp.setManagedMemory(frontend.getInt());
 		cudaDeviceProp.setIsMultiGpuBoard(frontend.getInt());
 		cudaDeviceProp.setMultiGpuBoardGroupID(frontend.getInt());
-		frontend.getInt(); // è in più da capire il perchè
+		//frontend.getInt(); // è in più da capire il perche'
+		frontend.flush();
 		return exit_c;
 	}
 }
