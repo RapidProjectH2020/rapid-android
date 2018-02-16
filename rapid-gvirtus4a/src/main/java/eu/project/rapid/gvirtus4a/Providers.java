@@ -13,7 +13,9 @@ public class Providers {
 
     private Providers() {
         providers = new Vector<>();
-        providers.add(new Provider("193.205.230.23", 9991));
+        providers.add(new Provider("193.205.230.23", 9998));
+//        providers.add(new Provider("54.72.110.23", 9996));
+//        providers.add(new Provider("80.158.23.133", 9998));
         instance = this;
     }
 

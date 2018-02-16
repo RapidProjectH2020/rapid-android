@@ -33,15 +33,15 @@ public final class Frontend {
     private DataOutputStream dos;
     private DataInputStream dis;
 
-
     private Transmitter transmitter;
 
     private Frontend(String serverIpAddress, int port) {
         StrictMode.ThreadPolicy policy = new StrictMode.ThreadPolicy.Builder().permitAll().build();
         StrictMode.setThreadPolicy(policy);
-        this.serverIpAddress = serverIpAddress;
-        this.port = port;
+        Frontend.serverIpAddress = serverIpAddress;
+        Frontend.port = port;
         try {
+            Log.i(LOG_TAG, "Connecting to GPU backend " + Frontend.serverIpAddress + ":" + Frontend.port);
             socket = new Socket(serverIpAddress, port);
             dos = new DataOutputStream(socket.getOutputStream());
             dis = new DataInputStream(socket.getInputStream());

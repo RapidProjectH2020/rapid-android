@@ -26,14 +26,17 @@ public class CudaRtFrontend {
 	}
 	*/
 
+	// FIXME: Remove finalize() - not recommended for releasing resources.
 	@Override
 	public void finalize() {
 		close();
 	}
 
 	public void close() {
-		frontend.close();
-		frontend=null;
+		if (frontend != null) {
+			frontend.close();
+			frontend=null;
+		}
 	}
 	/* CUDA RUNTIME DEVICE */
 	
