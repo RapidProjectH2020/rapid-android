@@ -1,6 +1,9 @@
 package eu.project.rapid.gvirtus4a;
 
+import java.io.IOException;
 import java.util.Vector;
+
+import eu.project.rapid.gvirtus4a.params.IntParam;
 
 /**
  * Created by raffaelemontella on 26/04/2017.
@@ -14,8 +17,9 @@ public class Providers {
     private Providers() {
         providers = new Vector<>();
         providers.add(new Provider("193.205.230.23", 9998));
-//        providers.add(new Provider("54.72.110.23", 9996));
-//        providers.add(new Provider("80.158.23.133", 9998));
+        providers.add(new Provider("80.158.23.133", 9998));
+        providers.add(new Provider("54.72.110.23", 9998));
+
         instance = this;
     }
 
@@ -27,6 +31,21 @@ public class Providers {
     }
 
     public Provider getBest() {
+        /*
+        Provider result=null;
+        Vector<Provider> availables=new Vector<>();
+        for (Provider provider:providers) {
+            try {
+                provider.deviceQuery();
+                availables.add(provider);
+            } catch (IOException ex) {
+                throw new RuntimeException(ex);
+            }
+
+        }
+        result=availables.get(0);
+        return result;
+        */
         return providers.get(0);
     }
 
@@ -34,4 +53,6 @@ public class Providers {
         Provider provider = new Provider(host, port);
         providers.add(provider);
     }
+
+
 }
