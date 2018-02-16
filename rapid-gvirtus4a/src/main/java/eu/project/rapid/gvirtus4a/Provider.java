@@ -22,11 +22,13 @@ public class Provider {
         this.host=host;
         this.port=port;
 
+        /*
         try {
             deviceQuery();
         } catch (IOException ex) {
             throw new RuntimeException(ex);
         }
+        */
     }
 
     public String getHost() { return host; }
