@@ -11,7 +11,7 @@ public class CudaRtFrontend {
 	
 	private Frontend frontend;
 	
-	public CudaRtFrontend(String serverIpAddress ,  int port) {
+	public CudaRtFrontend(String serverIpAddress ,  int port) throws IOException{
 
 		frontend=Frontend.getFrontend(serverIpAddress, port);
 
@@ -323,7 +323,7 @@ public class CudaRtFrontend {
 		cudaDeviceProp.setManagedMemory(frontend.getInt());
 		cudaDeviceProp.setIsMultiGpuBoard(frontend.getInt());
 		cudaDeviceProp.setMultiGpuBoardGroupID(frontend.getInt());
-		//frontend.getInt(); // è in più da capire il perche'
+
 		frontend.flush();
 		return exit_c;
 	}
