@@ -21,6 +21,9 @@ import java.io.DataOutputStream;
 import java.io.IOException;
 import java.net.Socket;
 
+import eu.project.rapid.common.AnimationMsgSender;
+import eu.project.rapid.common.RapidConstants;
+import eu.project.rapid.common.RapidMessages;
 import eu.project.rapid.gvirtus4a.params.IntParam;
 
 public final class Frontend {
@@ -32,6 +35,11 @@ public final class Frontend {
     private Socket socket;
     private DataOutputStream dos;
     private DataInputStream dis;
+
+    private static final boolean useAnimationServer = true;
+    private static final AnimationMsgSender animationMsgSender =
+            AnimationMsgSender.getInstance(RapidConstants.DEFAULT_SERVER_IP,
+                    RapidConstants.DEFAULT_PRIMARY_ANIMATION_SERVER_PORT);
 
     private Transmitter transmitter;
 
@@ -108,6 +116,15 @@ public final class Frontend {
     public  int Execute(String routine, Buffer buffer, IntParam result) throws IOException {
 
         Log.v(LOG_TAG, "Entered Execute() - " + buffer.GetString());
+
+        if (useAnimationServer) {
+            if (Util.isOffloadedAndroid()) {
+                animationMsgSender.sendAnimationMsg(RapidMessages.AnimationMsg.GVBE_REMOTE_RUN_CUDA);
+            } else {
+//                animationMsgSender.sendAnimationMsg(RapidMessages.AnimationMsg.GVFE_LOCAL_OFFLOAD_GVBE);
+                animationMsgSender.sendAnimationMsg(RapidMessages.AnimationMsg.GVBE_LOCAL_RUN_CUDA);
+            }
+        }
 
         long size = buffer.Size() / 2;
         byte[] bits = Util.longToByteArray(size);
@@ -188,6 +205,15 @@ public final class Frontend {
         if (result!=null) {
             result.value = inBuffer[4];
         }
+
+        if (useAnimationServer) {
+            if (Util.isOffloadedAndroid()) {
+                animationMsgSender.sendAnimationMsg(RapidMessages.AnimationMsg.GVBE_REMOTE_RESULT_GVFE);
+            } else {
+                animationMsgSender.sendAnimationMsg(RapidMessages.AnimationMsg.GVBE_LOCAL_RESULT_GVFE);
+            }
+        }
+
         return inBuffer[0];
 
     }

@@ -53,10 +53,12 @@ import eu.project.rapid.ac.d2d.PhoneSpecs;
 import eu.project.rapid.ac.profilers.NetworkProfiler;
 import eu.project.rapid.ac.utils.Constants;
 import eu.project.rapid.ac.utils.Utils;
+import eu.project.rapid.common.AnimationMsgSender;
 import eu.project.rapid.common.Clone;
 import eu.project.rapid.common.Configuration;
 import eu.project.rapid.common.RapidConstants;
 import eu.project.rapid.common.RapidMessages;
+import eu.project.rapid.common.RapidMessages.AnimationMsg;
 import eu.project.rapid.common.RapidUtils;
 
 import static android.util.Log.i;
@@ -105,6 +107,10 @@ public class RapidNetworkService extends IntentService {
     private static final int vmNrVCPUs = 1; // FIXME: number of CPUs on the VM
     private static final int vmMemSize = 512; // FIXME
     private static final int vmNrGpuCores = 1200; // FIXME
+
+    private static final AnimationMsgSender animationMsgSender =
+            AnimationMsgSender.getInstance(RapidConstants.DEFAULT_SERVER_IP,
+                    RapidConstants.DEFAULT_PRIMARY_ANIMATION_SERVER_PORT);
 
     // Intent for sending broadcast messages
     public static final String RAPID_VM_CHANGED = "eu.project.rapid.vmChanged";
@@ -555,11 +561,19 @@ public class RapidNetworkService extends IntentService {
 
                 // Send the name and id to the DS
                 if (usePrevVm && myId != -1) {
+
+                    if (DFE.useAnimationServer)
+                        animationMsgSender.sendAnimationMsg(AnimationMsg.AC_PREV_VM_DS);
+
                     i(TAG, "AC_REGISTER_PREV_DS");
                     // Send message format: command (java byte), userId (java long), qosFlag (java int)
                     dsOut.writeByte(RapidMessages.AC_REGISTER_PREV_DS);
-                    dsOut.writeLong(myId); // send my user ID so that my previous VM can be released
+                    dsOut.writeLong(myId);
                 } else {
+
+                    if (DFE.useAnimationServer)
+                        animationMsgSender.sendAnimationMsg(AnimationMsg.AC_NEW_REGISTER_DS);
+
                     i(TAG, "AC_REGISTER_NEW_DS");
                     dsOut.writeByte(RapidMessages.AC_REGISTER_NEW_DS);
 
@@ -608,6 +622,15 @@ public class RapidNetworkService extends IntentService {
         int nrTimesTried = 0;
         Socket slamSocket = null;
         boolean connectedWithSlam = false;
+
+        if (DFE.useAnimationServer) {
+            // shouldn't check for myId == -1 here, since the DS has already given us a new ID
+            if (usePrevVm) {
+                animationMsgSender.sendAnimationMsg(AnimationMsg.AC_PREV_REGISTER_SLAM);
+            } else {
+                animationMsgSender.sendAnimationMsg(AnimationMsg.AC_NEW_REGISTER_SLAM);
+            }
+        }
 
         do {
             i(TAG, "Registering with SLAM " + config.getSlamIp() + ":" + config.getSlamPort());

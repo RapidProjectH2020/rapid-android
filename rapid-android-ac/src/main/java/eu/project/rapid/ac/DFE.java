@@ -82,11 +82,14 @@ import eu.project.rapid.ac.profilers.NetworkProfiler;
 import eu.project.rapid.ac.profilers.Profiler;
 import eu.project.rapid.ac.profilers.ProgramProfiler;
 import eu.project.rapid.ac.utils.Constants;
+import eu.project.rapid.common.AnimationMsgSender;
 import eu.project.rapid.common.Clone;
 import eu.project.rapid.common.Configuration;
+import eu.project.rapid.common.RapidConstants;
 import eu.project.rapid.common.RapidConstants.COMM_TYPE;
 import eu.project.rapid.common.RapidConstants.ExecLocation;
 import eu.project.rapid.common.RapidMessages;
+import eu.project.rapid.common.RapidMessages.AnimationMsg;
 import eu.project.rapid.common.RapidUtils;
 
 import static eu.project.rapid.ac.profilers.Profiler.REGIME_CLIENT;
@@ -135,6 +138,11 @@ public class DFE {
     private static CountDownLatch waitForTaskRunners;
     private static final int nrTaskRunners = 3;
     private static List<TaskRunner> taskRunnersList;
+
+    public static final boolean useAnimationServer = true;
+    private static final AnimationMsgSender animationMsgSender =
+            AnimationMsgSender.getInstance(RapidConstants.DEFAULT_SERVER_IP,
+                    RapidConstants.DEFAULT_PRIMARY_ANIMATION_SERVER_PORT);
 
     // Get broadcast messages from the Rapid service. They will contain network measurements etc.
     private static BroadcastReceiver rapidBroadcastReceiver;
@@ -525,6 +533,7 @@ public class DFE {
         private OutputStream os;
         private ObjectInputStream ois;
         private ObjectOutputStream oos;
+        private int id;
 
         ScheduledThreadPoolExecutor vmConnectionScheduledPool =
                 (ScheduledThreadPoolExecutor) Executors.newScheduledThreadPool(1);
@@ -532,6 +541,7 @@ public class DFE {
         static final int FREQUENCY_VM_CONNECTION = 2 * 60 * 1000;
 
         TaskRunner(int id) {
+            this.id = id;
             TAG = "DFE-TaskRunner-" + id;
         }
 
@@ -598,6 +608,16 @@ public class DFE {
                 commType = COMM_TYPE.SSL;
             }
 
+            if (useAnimationServer && this.id == 0) {
+                if (RapidNetworkService.usePrevVm) {
+                    animationMsgSender.sendAnimationMsg(AnimationMsg.AC_PREV_REGISTER_VM);
+                    animationMsgSender.sendAnimationMsg(AnimationMsg.AC_PREV_CONN_VM);
+                } else {
+                    animationMsgSender.sendAnimationMsg(AnimationMsg.AC_NEW_REGISTER_VM);
+                    animationMsgSender.sendAnimationMsg(AnimationMsg.AC_NEW_CONN_VM);
+                }
+            }
+
             if (commType == COMM_TYPE.CLEAR) {
                 establishClearConnection();
             } else { // (commType == COMM_TYPE.SSL)
@@ -610,9 +630,40 @@ public class DFE {
 
             // If the connection was successful then try to send the app to the clone
             if (onLineClear || onLineSSL) {
+
+                if (useAnimationServer && this.id == 0) {
+                    if (onLineSSL) animationMsgSender.sendAnimationMsg(AnimationMsg.AC_COMM_SSL);
+                    else  animationMsgSender.sendAnimationMsg(AnimationMsg.AC_COMM_CLEAR);
+                }
+
                 Log.i(TAG, "The communication type established with the clone is: " + commType);
                 sendApk(is, os, oos);
+
+                if (useAnimationServer && this.id == 0) {
+                    if (RapidNetworkService.usePrevVm) {
+                        animationMsgSender.sendAnimationMsg(AnimationMsg.AC_PREV_RTT_VM);
+                        animationMsgSender.sendAnimationMsg(AnimationMsg.AC_PREV_DL_RATE_VM);
+                        animationMsgSender.sendAnimationMsg(AnimationMsg.AC_PREV_UL_RATE_VM);
+                        animationMsgSender.sendAnimationMsg(AnimationMsg.AC_PREV_REGISTRATION_OK_VM);
+                    } else {
+                        animationMsgSender.sendAnimationMsg(AnimationMsg.AC_NEW_RTT_VM);
+                        animationMsgSender.sendAnimationMsg(AnimationMsg.AC_NEW_DL_RATE_VM);
+                        animationMsgSender.sendAnimationMsg(AnimationMsg.AC_NEW_UL_RATE_VM);
+                        animationMsgSender.sendAnimationMsg(AnimationMsg.AC_NEW_REGISTRATION_OK_VM);
+                    }
+                }
+
             } else {
+                if (useAnimationServer && this.id == 0) {
+                    animationMsgSender.sendAnimationMsg(AnimationMsg.AC_COMM_NONE);
+
+                    if (RapidNetworkService.usePrevVm) {
+                        animationMsgSender.sendAnimationMsg(AnimationMsg.AC_PREV_REGISTRATION_FAIL_VM);
+                    } else {
+                        animationMsgSender.sendAnimationMsg(AnimationMsg.AC_NEW_REGISTRATION_FAIL_VM);
+                    }
+                }
+
                 Log.e(TAG, "Could not register with the VM");
             }
             sendUpdateConnectionInfo();
@@ -769,6 +820,14 @@ public class DFE {
          */
         private void sendApk(InputStream is, OutputStream os, ObjectOutputStream oos) {
 
+            if (useAnimationServer && this.id == 0) {
+                if (RapidNetworkService.usePrevVm) {
+                    animationMsgSender.sendAnimationMsg(AnimationMsg.AC_PREV_APK_VM);
+                } else {
+                    animationMsgSender.sendAnimationMsg(AnimationMsg.AC_NEW_APK_VM);
+                }
+            }
+
             try {
                 Log.d(TAG, "Getting apk data");
                 String apkName = mPManager.getApplicationInfo(mAppName, 0).sourceDir;
@@ -901,12 +960,18 @@ public class DFE {
             DeviceProfiler devProfiler = new DeviceProfiler(mContext);
             Profiler profiler = new Profiler(mRegime, progProfiler, null, devProfiler);
 
+            if (useAnimationServer)
+                animationMsgSender.sendAnimationMsg(AnimationMsg.AC_PREPARE_DATA);
+
             // Start tracking execution statistics for the method
             profiler.startExecutionInfoTracking();
             Object result = null; // Access it
             try {
                 // Make sure that the method is accessible
-                // if (useAnimationServer) RapidUtils.sendAnimationMsg(config, RapidMessages.AC_EXEC_LOCAL);
+                if (useAnimationServer) {
+                    animationMsgSender.sendAnimationMsg(AnimationMsg.AC_DECISION_LOCAL);
+                }
+                // RapidUtils.sendAnimationMsg(config, RapidMessages.AC_EXEC_LOCAL);
                 Long startTime = System.nanoTime();
                 task.m.setAccessible(true);
 
@@ -922,6 +987,15 @@ public class DFE {
                 profiler.stopAndDiscardExecutionInfoTracking();
                 e.printStackTrace();
             }
+
+            if (useAnimationServer) {
+                if (task.m.getName().equals("localGpuMatrixMul")) {
+                    animationMsgSender.sendAnimationMsg(AnimationMsg.AC_LOCAL_CUDA_FINISHED);
+                } else {
+                    animationMsgSender.sendAnimationMsg(AnimationMsg.AC_LOCAL_FINISHED);
+                }
+            }
+
             return result;
         }
 
@@ -967,6 +1041,8 @@ public class DFE {
             // Maybe the developer has implemented the prepareDataOnClient() method that helps him prepare
             // the data based on where the execution will take place then call it.
             try {
+                if (useAnimationServer)
+                    animationMsgSender.sendAnimationMsg(AnimationMsg.AC_PREPARE_DATA);
                 long s = System.nanoTime();
                 Method prepareDataMethod = task.o.getClass().getDeclaredMethod("prepareDataOnClient");
                 prepareDataMethod.setAccessible(true);
@@ -986,6 +1062,14 @@ public class DFE {
 
             // Start tracking execution statistics for the method
             profiler.startExecutionInfoTracking();
+
+            if (useAnimationServer) {
+                if (nrClones > 1) {
+                    animationMsgSender.sendAnimationMsg(AnimationMsg.AC_DECISION_OFFLOAD_2VMs_AS);
+                } else {
+                    animationMsgSender.sendAnimationMsg(AnimationMsg.AC_DECISION_OFFLOAD_AS);
+                }
+            }
 
             Object result;
             try {
@@ -1014,6 +1098,17 @@ public class DFE {
                 // ConnectionRepair repair = new ConnectionRepair();
                 // repair.start();
             }
+
+            if (useAnimationServer) {
+                if (task.m.getName().equals("localGpuMatrixMul")) {
+                    animationMsgSender.sendAnimationMsg(AnimationMsg.AC_LOCAL_CUDA_FINISHED);
+                } else if (nrClones > 1) {
+                    animationMsgSender.sendAnimationMsg(AnimationMsg.AC_OFFLOADING_FINISHED_PARALLEL);
+                } else {
+                    animationMsgSender.sendAnimationMsg(AnimationMsg.AC_OFFLOADING_FINISHED);
+                }
+            }
+
             return result;
         }
 

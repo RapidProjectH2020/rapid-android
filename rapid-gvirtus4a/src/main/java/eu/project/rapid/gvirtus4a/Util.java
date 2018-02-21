@@ -1,6 +1,7 @@
 package eu.project.rapid.gvirtus4a;
 
 import android.content.Context;
+import android.os.Environment;
 import android.telephony.TelephonyManager;
 import android.util.Log;
 
@@ -555,5 +556,23 @@ public final class Util {
         byte[] bytes = toByteArray(is);
         is.close();
         return new String(bytes, Charset.forName("UTF-8"));
+    }
+
+
+    /**
+     * An empty file will be created automatically on the clone by Acceleration-Server. The presence
+     * or absence of this file can let the method know if it is running on the phone or on the clone.
+     *
+     * @return <b>True</b> if it is running on the clone<br>
+     * <b>False</b> if it is running on the phone.
+     */
+    public static boolean isOffloadedAndroid() {
+        try {
+            String mntSdcard = Environment.getExternalStorageDirectory().getAbsolutePath();
+            String fileOffloaded = mntSdcard + File.separator + "rapid" + File.separator + "offloaded";
+            return new File(fileOffloaded).exists();
+        } catch (Exception e) {
+            return false;
+        }
     }
 }

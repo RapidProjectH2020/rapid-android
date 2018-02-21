@@ -61,9 +61,7 @@ import eu.project.rapid.ac.d2d.D2DMessage;
 import eu.project.rapid.ac.utils.Constants;
 import eu.project.rapid.ac.utils.Utils;
 import eu.project.rapid.common.Configuration;
-import eu.project.rapid.common.RapidConstants;
 import eu.project.rapid.common.RapidMessages;
-import eu.project.rapid.common.RapidMessages.AnimationMsg;
 import eu.project.rapid.common.RapidUtils;
 
 /**
@@ -256,13 +254,13 @@ public class AccelerationServer extends Service {
                 startD2DThread();
 
                 // Check if the primary animation server is reachable
-                boolean primaryAnimationServerReachable = RapidUtils.isPrimaryAnimationServerRunning(
-                        config.getAnimationServerIp(), config.getAnimationServerPort());
-                Log.i(TAG, "Primary animation server reachable: " + primaryAnimationServerReachable);
-                if (!primaryAnimationServerReachable) {
-                    config.setAnimationServerIp(RapidConstants.DEFAULT_SECONDARY_ANIMATION_SERVER_IP);
-                    config.setAnimationServerPort(RapidConstants.DEFAULT_SECONDARY_ANIMATION_SERVER_PORT);
-                }
+//                boolean primaryAnimationServerReachable = RapidUtils.isPrimaryAnimationServerRunning(
+//                        config.getAnimationServerIp(), config.getAnimationServerPort());
+//                Log.i(TAG, "Primary animation server reachable: " + primaryAnimationServerReachable);
+//                if (!primaryAnimationServerReachable) {
+//                    config.setAnimationServerIp(RapidConstants.DEFAULT_SECONDARY_ANIMATION_SERVER_IP);
+//                    config.setAnimationServerPort(RapidConstants.DEFAULT_SECONDARY_ANIMATION_SERVER_PORT);
+//                }
             }
         }
 
@@ -575,7 +573,7 @@ public class AccelerationServer extends Service {
                                 socket.send(packet);
                                 Log.i(TAG, "==>> Broadcast message sent to " + broadcastAddress);
                                 Log.i(TAG, "==>> CMD: " + msg);
-                                RapidUtils.sendAnimationMsg(config, AnimationMsg.AS_BROADCASTING_D2D);
+//                                RapidUtils.sendAnimationMsg(config, AnimationMsg.AS_BROADCASTING_D2D);
 
                             } catch (NullPointerException | IOException e) {
                                 Log.e(TAG, "Exception while sending data: " + e);
