@@ -19,6 +19,7 @@ import android.util.Log;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
+import java.net.InetSocketAddress;
 import java.net.Socket;
 
 import eu.project.rapid.common.AnimationMsgSender;
@@ -43,22 +44,24 @@ public final class Frontend {
 
     private Transmitter transmitter;
 
-    private Frontend(String serverIpAddress, int port) {
+    private Frontend(String serverIpAddress, int port) throws IOException{
         StrictMode.ThreadPolicy policy = new StrictMode.ThreadPolicy.Builder().permitAll().build();
         StrictMode.setThreadPolicy(policy);
         Frontend.serverIpAddress = serverIpAddress;
         Frontend.port = port;
-        try {
+        //try {
             Log.i(LOG_TAG, "Connecting to GPU backend " + Frontend.serverIpAddress + ":" + Frontend.port);
-            socket = new Socket(serverIpAddress, port);
+            socket = new Socket();
+            socket.connect(new InetSocketAddress(serverIpAddress, port), 1000);
+            //socket = new Socket(serverIpAddress, port);
             dos = new DataOutputStream(socket.getOutputStream());
             dis = new DataInputStream(socket.getInputStream());
             transmitter=new Transmitter(dis,dos);
-        } catch (IOException ex) {
-            // TODO gestire la mancata connessione
-            throw new RuntimeException(ex);
-
-        }
+        //} catch (IOException ex) {
+        //    // TODO gestire la mancata connessione
+        //    throw new RuntimeException(ex);
+        //
+        //}
 
     }
 
@@ -95,14 +98,14 @@ public final class Frontend {
         return transmitter.getHex(size);
     }
 
-    public static Frontend getFrontend(String serverIpAddress, int port) {
+    public static Frontend getFrontend(String serverIpAddress, int port) throws IOException {
         Frontend.serverIpAddress=serverIpAddress;
         Frontend.port=port;
 
         return new Frontend(serverIpAddress, port);
     }
 
-    public static Frontend getFrontend() {
+    public static Frontend getFrontend() throws IOException{
         Frontend.serverIpAddress=serverIpAddress;
         Frontend.port=port;
 

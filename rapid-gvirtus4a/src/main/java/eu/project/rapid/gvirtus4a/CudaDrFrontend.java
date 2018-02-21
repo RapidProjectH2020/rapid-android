@@ -14,13 +14,8 @@ public class CudaDrFrontend {
     private static final String LOG_TAG = "CUDA DRIVER FRONTEND";
 
     private Frontend frontend;
-    public CudaDrFrontend() {
-        Providers providers = Providers.getInstance();
-        Provider provider = providers.getBest();
-        frontend=Frontend.getFrontend(provider.getHost(), provider.getPort());
-    }
 
-    public CudaDrFrontend(String serverIpAddress, int port) {
+    public CudaDrFrontend(String serverIpAddress, int port) throws IOException {
 
         frontend=Frontend.getFrontend(serverIpAddress, port);
 
