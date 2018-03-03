@@ -1055,14 +1055,6 @@ public class DFE {
                 e.printStackTrace();
             }
 
-            ProgramProfiler progProfiler = new ProgramProfiler(mAppName, task.m.getName());
-            DeviceProfiler devProfiler = new DeviceProfiler(mContext);
-            NetworkProfiler netProfiler = new NetworkProfiler(mContext, config);
-            Profiler profiler = new Profiler(mRegime, progProfiler, netProfiler, devProfiler);
-
-            // Start tracking execution statistics for the method
-            profiler.startExecutionInfoTracking();
-
             if (useAnimationServer) {
                 if (nrClones > 1) {
                     animationMsgSender.sendAnimationMsg(AnimationMsg.AC_DECISION_OFFLOAD_2VMs_AS);
@@ -1070,6 +1062,14 @@ public class DFE {
                     animationMsgSender.sendAnimationMsg(AnimationMsg.AC_DECISION_OFFLOAD_AS);
                 }
             }
+
+            ProgramProfiler progProfiler = new ProgramProfiler(mAppName, task.m.getName());
+            DeviceProfiler devProfiler = new DeviceProfiler(mContext);
+            NetworkProfiler netProfiler = new NetworkProfiler(mContext, config);
+            Profiler profiler = new Profiler(mRegime, progProfiler, netProfiler, devProfiler);
+
+            // Start tracking execution statistics for the method
+            profiler.startExecutionInfoTracking();
 
             Object result;
             try {

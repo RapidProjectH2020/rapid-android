@@ -521,6 +521,8 @@ public class RapidNetworkService extends IntentService {
                 } while (!registeredWithSlam && vmmIndex < vmmIPs.size());
             }
         }
+        registeringWithDs = false;
+        registeringWithSlam = false;
         return registeredWithSlam;
     }
 
@@ -609,7 +611,6 @@ public class RapidNetworkService extends IntentService {
             }
         }
 
-        registeringWithDs = false;
         return false;
     }
 
@@ -709,7 +710,6 @@ public class RapidNetworkService extends IntentService {
             }
         }
 
-        registeringWithSlam = false;
         return false;
     }
 }
