@@ -55,8 +55,11 @@ import eu.project.rapid.ac.ResultContainer;
 import eu.project.rapid.ac.profilers.DeviceProfiler;
 import eu.project.rapid.ac.utils.Constants;
 import eu.project.rapid.ac.utils.Utils;
+import eu.project.rapid.common.AnimationMsgSender;
 import eu.project.rapid.common.Configuration;
+import eu.project.rapid.common.RapidConstants;
 import eu.project.rapid.common.RapidMessages;
+import eu.project.rapid.common.RapidMessages.AnimationMsg;
 import eu.project.rapid.common.RapidUtils;
 
 /**
@@ -103,6 +106,10 @@ public class AppHandler implements Runnable {
     // The AS will let the DS shut down the VM only if this is equal to 0.
     private static final AtomicInteger nrTasksCurrentlyBeingExecuted = new AtomicInteger(0);
     private static AtomicBoolean migrationInProgress = new AtomicBoolean(false);
+
+    private static final AnimationMsgSender animationMsgSender =
+            AnimationMsgSender.getInstance(RapidConstants.DEFAULT_SERVER_IP,
+                    RapidConstants.DEFAULT_PRIMARY_ANIMATION_SERVER_PORT);
 
     /**
      * Key is the appName.
@@ -560,6 +567,9 @@ public class AppHandler implements Runnable {
             // Start preparing for parallel execution, talk to DS to allocate helper VMs, etc.
             if (withMultipleVMs) {
                 withMultipleVMs = startParallelOrForwardingExecution(runMethod, false);
+                if (AccelerationServer.vmId > 2) animationMsgSender.sendAnimationMsg(AnimationMsg.AS_RUN_METHOD_PARALLEL);
+            } else {
+                if (AccelerationServer.vmId > 2) animationMsgSender.sendAnimationMsg(AnimationMsg.AS_RUN_METHOD);
             }
 
             // Run the method on this VM
@@ -570,7 +580,11 @@ public class AppHandler implements Runnable {
 
             // If a parallel execution was performed correctly, reduce the partial results.
             if (withMultipleVMs) {
+                if (AccelerationServer.vmId > 2) animationMsgSender.sendAnimationMsg(AnimationMsg.AS_COMBINE_PARALLEL_RESULTS);
                 result = reduceResults(objClass, result, false);
+                if (AccelerationServer.vmId > 2) animationMsgSender.sendAnimationMsg(AnimationMsg.AS_RESULT_PARALLEL_AC);
+            } else {
+                if (AccelerationServer.vmId > 2) animationMsgSender.sendAnimationMsg(AnimationMsg.AS_RESULT_AC);
             }
 
             Log.d(TAG, runMethod.getName() + ": retrieveAndExecute time - "
@@ -610,7 +624,7 @@ public class AppHandler implements Runnable {
     private Object executeMethod(Class<?> objClass, Method runMethod) throws IllegalAccessException {
         long startExecTime;
         long execDuration = -1;
-        Object result = null;
+        Object result;
 
         // RapidUtils.sendAnimationMsg(config, RapidMessages.AC_EXEC_REMOTE);
         try {
@@ -832,7 +846,7 @@ public class AppHandler implements Runnable {
 
             // Wake up the server helper threads and tell them to send the object to execute, the
             // method, parameter types and parameter values
-
+            if (AccelerationServer.vmId > 2) animationMsgSender.sendAnimationMsg(AnimationMsg.AS_SEND_METHOD_VM_HELPER);
             sendCommandToAllHelperThreads(RapidMessages.AC_OFFLOAD_REQ_AS);
 
             return true;
@@ -916,6 +930,7 @@ public class AppHandler implements Runnable {
                 dsOos.writeByte(RapidMessages.FORWARD_REQ);
                 dsOos.writeLong(AccelerationServer.vmId);
             } else {
+                if (AccelerationServer.vmId > 2) animationMsgSender.sendAnimationMsg(AnimationMsg.AS_PARALLEL_REQ_DS);
                 dsOos.writeByte(RapidMessages.PARALLEL_REQ);
                 dsOos.writeLong(AccelerationServer.vmId);
                 dsOos.writeInt(numberOfVMHelpers);

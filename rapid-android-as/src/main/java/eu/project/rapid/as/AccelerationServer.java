@@ -387,7 +387,7 @@ public class AccelerationServer extends Service {
                 byte status = dsIn.readByte();
                 System.out.println("Return Status: " + (status == RapidMessages.OK ? "OK" : "ERROR"));
                 if (status == RapidMessages.OK) {
-                    vmId = dsIn.readLong();
+                    vmId = dsIn.readLong(); // Helper VMs are given ID 1 and 2
                     Log.i(TAG, "Received vmId: " + vmId);
                     return true;
                 }
