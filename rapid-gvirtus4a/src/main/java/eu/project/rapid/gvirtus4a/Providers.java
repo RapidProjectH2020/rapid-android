@@ -14,6 +14,7 @@ import eu.project.rapid.gvirtus4a.params.IntParam;
 
 public class Providers  {
     private static final String LOG_TAG = "PROVIDERS";
+    private static final int DEFAULT_MIN_RUNTIME_VERSION=6500;
     private Vector<Provider> providers;
     private static Providers instance;
     private Provider defaultProvider;
@@ -21,7 +22,12 @@ public class Providers  {
     public void setDefaultProvider(Provider provider) {
         this.defaultProvider=provider;
     }
-    public Provider getDefaultProvider() { return defaultProvider; }
+    public Provider getDefaultProvider() {
+        if (defaultProvider==null) {
+            defaultProvider=getBest();
+        }
+    return defaultProvider;
+    }
 
     private Providers() {
         providers = new Vector<>();
@@ -34,6 +40,10 @@ public class Providers  {
             instance = new Providers();
         }
         return instance;
+    }
+
+    public Provider getBest() {
+        return getBest(DEFAULT_MIN_RUNTIME_VERSION);
     }
 
     public Provider getBest(int minRuntimeVersion) {
