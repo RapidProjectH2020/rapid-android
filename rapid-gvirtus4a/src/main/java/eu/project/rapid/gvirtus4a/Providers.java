@@ -47,10 +47,11 @@ public class Providers  {
     }
 
     public Provider getBest(int minRuntimeVersion) {
-
+        Log.d(LOG_TAG,"getBest");
         Provider result=null;
         Vector<Provider> availables=new Vector<>();
         for (Provider provider:providers) {
+            Log.d(LOG_TAG,"Provider:"+provider.getHost()+":"+provider.getPort());
             try {
                 provider.deviceQuery();
                 if (provider.getRuntimeVersion()>=minRuntimeVersion) {
@@ -62,12 +63,16 @@ public class Providers  {
 
                     boolean success = provider.matrixMul();
                     if (success==true) {
+                        Log.d(LOG_TAG,"wallClock:"+provider.getWallClock());
                         availables.add(provider);
+                        Log.d(LOG_TAG,"Added!");
+                    } else {
+                        Log.d(LOG_TAG,"MatrixMul failed!");
                     }
                 }
 
             } catch (IOException ex) {
-
+                Log.e(LOG_TAG,ex.getMessage());
             }
 
         }
